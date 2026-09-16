@@ -43,3 +43,5 @@
 .p-body .tagsm.w{background:var(--warnsoft);color:var(--warn)}
 .p-body .tagsm.g{background:var(--goodsoft);color:var(--good)}
 .p-body .tagsm.n{background:var(--paper);color:var(--ink2)}
+.theme-pairs{display:flex;flex-direction:column;gap:10px}.theme-pair{display:flex;align-items:center;gap:8px}.theme-pair-fields{display:grid;grid-template-columns:minmax(150px,.8fr) minmax(0,1.4fr);gap:8px;flex:1}.theme-pair .btn{flex:none;min-width:38px;padding:0 10px;justify-content:center}.theme-pair .btn:disabled{opacity:.4;cursor:not-allowed}.review-themes{display:flex;flex-direction:column;gap:3px}
+@media(max-width:560px){.theme-pair-fields{grid-template-columns:1fr}.theme-pair{align-items:stretch}.theme-pair .btn{align-self:flex-end}}
