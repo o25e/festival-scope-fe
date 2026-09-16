@@ -569,16 +569,6 @@ function FormScreen({ plan, setPlan, step, setStep, onReview }) {
                   onChange={(e) => update('end', e.target.value)}
                 />
               </Input>
-              <Input full label="확보 주차면수" hint="접근성 판단에 사용">
-                <input
-                  type="number"
-                  min="0"
-                  step="50"
-                  value={plan.parking || ''}
-                  onChange={(e) => update('parking', Number(e.target.value))}
-                  placeholder="1150"
-                />
-              </Input>
             </div>
           )}
           {step === 3 && (
@@ -726,7 +716,6 @@ function ReviewScreen({ plan, onEdit, onAnalyze }) {
       </>,
     ],
     ['행사장 수용 규모', plan.venueCapacity || '미정'],
-    ['확보 주차면수', `${fmt(plan.parking)}면`],
     [
       '프로그램 구성',
       PROGRAMS.filter((p) => plan.programs.includes(p.id))
@@ -1476,31 +1465,22 @@ function getDetailHtml(item, A) {
       sec(
         1,
         '핵심 지표',
-        `<div class="metricrow c2">${mt('적합성 점수', `${v.s3}<small>/100</small>`, '평상시 25% · 월별 50% · 접근성 25%', true)}${mt(`${m + 1}월 관광수요 지수`, v.mIdx, `연중 ${v.mRank}위 (연평균 100)`)}${mt('평상시 지역 관광수요', `${R.baseDemand}<small>/100</small>`, `${R.annual} · ${R.baseNote}`)}${mt('행사장 접근성', `${v.accScore}<small>/100</small>`, `대중교통 ${ac.transitScore} · 주차 충족률 ${Math.round(v.parkRatio * 100)}%`)}</div>`,
+        `<div class="metricrow c2">${mt('적합성 점수', `${v.s3}<small>/100</small>`, '평상시 25% · 월별 50% · 접근성 25%', true)}${mt(`${m + 1}월 관광수요 지수`, v.mIdx, `연중 ${v.mRank}위 (연평균 100)`)}${mt('평상시 지역 관광수요', `${R.baseDemand}<small>/100</small>`, `${R.annual} · ${R.baseNote}`)}${mt('행사장 접근성', `${v.accScore}<small>/100</small>`, `대중교통 ${ac.transitScore} · ${ac.transitNote}`)}</div>`,
       ) +
       sec(
         2,
         '판단 근거 및 데이터',
-        `<div class="vizbox">${vBars(MONTHS, R.monthly, m, { ref: 100, refLabel: '연평균 100' })}<p class="vizcap">${R.name}의 최근 5년 월별 관광수요 지수(연평균 100 기준). 개최 월 ${m + 1}월은 ${v.mIdx}로 연중 ${v.mRank}위입니다.</p></div><div class="vizbox" style="margin-top:10px"><div class="metricrow c2" style="gap:8px">${mt('서울 도심 기준 이동', ac.car, `약 ${ac.km}km`)}${mt('철도', ac.train, ac.station)}${mt('확보 주차면수', `${fmt(p.parking)}<small>면</small>`, `권장 ${fmt(v.parkNeed)}면 · 충족률 ${Math.round(v.parkRatio * 100)}%`)}${mt('대중교통 접근성', `${ac.transitScore}<small>/100</small>`, ac.transitNote)}</div><p class="vizcap">권장 주차면수는 일평균 ${fmt(A.daily)}명 · 자가용 분담 60% · 동승 2.8명 · 회전율 3.5회를 적용한 값입니다.</p></div><div class="metricrow c2" style="margin-top:10px">${mt('외지인 방문 비율', `${R.outRatio}<small>%</small>`, '지역 내 소비 유발 기반')}${mt('체류형 방문 비율', `${R.stayRatio}<small>%</small>`, '숙박을 동반한 방문')}</div>`,
+        `<div class="vizbox">${vBars(MONTHS, R.monthly, m, { ref: 100, refLabel: '연평균 100' })}<p class="vizcap">${R.name}의 최근 5년 월별 관광수요 지수(연평균 100 기준). 개최 월 ${m + 1}월은 ${v.mIdx}로 연중 ${v.mRank}위입니다.</p></div><div class="vizbox" style="margin-top:10px"><div class="metricrow c2" style="gap:8px">${mt('서울 도심 기준 이동', ac.car, `약 ${ac.km}km`)}${mt('철도', ac.train, ac.station)}${mt('권장 주차면수', `${fmt(v.parkNeed)}<small>면</small>`, '목표 방문객 기반 산출')}${mt('대중교통 접근성', `${ac.transitScore}<small>/100</small>`, ac.transitNote)}</div><p class="vizcap">권장 주차면수는 일평균 ${fmt(A.daily)}명 · 자가용 분담 60% · 동승 2.8명 · 회전율 3.5회를 적용한 값입니다.</p></div><div class="metricrow c2" style="margin-top:10px">${mt('외지인 방문 비율', `${R.outRatio}<small>%</small>`, '지역 내 소비 유발 기반')}${mt('체류형 방문 비율', `${R.stayRatio}<small>%</small>`, '숙박을 동반한 방문')}</div>`,
       ) +
       sec(
         3,
         '결과 해석',
-        `<div class="readbox read"><p>${R.name}의 평상시 관광수요는 ${R.baseDemand}점으로 ${R.baseNote}입니다. 반면 개최 월인 ${m + 1}월은 지수 ${v.mIdx}로 연중 ${v.mRank}위여서, <strong>시기 선택 자체는 ${v.mIdx >= 115 ? '유리' : '무난'}합니다</strong>.</p><p>${v.accScore < 60 ? `전체 점수를 낮추는 요인은 접근성입니다. 주차 충족률 ${Math.round(v.parkRatio * 100)}%, 대중교통 ${ac.transitScore}점으로, ${ac.transitNote}. 목표 방문객이 몰리는 피크 시간대에 진입 동선이 병목이 될 수 있습니다.` : `접근성도 ${v.accScore}점으로 무리가 없어, 지역·시기 조합에서 큰 제약은 확인되지 않습니다.`}</p></div>`,
+        `<div class="readbox read"><p>${R.name}의 평상시 관광수요는 ${R.baseDemand}점으로 ${R.baseNote}입니다. 반면 개최 월인 ${m + 1}월은 지수 ${v.mIdx}로 연중 ${v.mRank}위여서, <strong>시기 선택 자체는 ${v.mIdx >= 115 ? '유리' : '무난'}합니다</strong>.</p><p>${v.accScore < 60 ? `전체 점수를 낮추는 요인은 접근성입니다. 대중교통 ${ac.transitScore}점으로, ${ac.transitNote}. 목표 방문객이 몰리는 피크 시간대에 진입 동선이 병목이 될 수 있습니다.` : `접근성도 ${v.accScore}점으로 무리가 없어, 지역·시기 조합에서 큰 제약은 확인되지 않습니다.`}</p></div>`,
       ) +
       sec(
         4,
         '권장 수정사항',
         recs([
-          ...(v.parkRatio < 0.9
-            ? [
-                {
-                  p: v.parkRatio < 0.7 ? 1 : 2,
-                  t: `외곽 임시주차장 ${fmt(Math.max(0, v.parkNeed - p.parking))}면 확보 + 셔틀 연계`,
-                  d: `현재 ${fmt(p.parking)}면으로 권장 ${fmt(v.parkNeed)}면의 ${Math.round(v.parkRatio * 100)}% 수준입니다. 행사장 인접 확보가 어렵다면 외곽 2~3개소로 분산하고 10분 간격 셔틀로 연결하는 방식이 일반적입니다.`,
-                },
-              ]
-            : []),
           ...(ac.transitScore < 65
             ? [
                 {
@@ -1935,7 +1915,6 @@ export default function App() {
       venueCapacity: '미정',
       start: '',
       end: '',
-      parking: 0,
       programs: [],
       outdoor: 85,
       rainplan: 'partial',
