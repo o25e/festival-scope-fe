@@ -26,6 +26,17 @@ const dparse = (s) => {
 }
 const levelClass = (level) => `pill ${level}`
 
+const getMapEmbedUrl = ({ lat, lon }) => {
+  const latitude = Number(lat)
+  const longitude = Number(lon)
+  const delta = 0.015
+  const bbox = `${longitude - delta},${latitude - delta},${longitude + delta},${latitude + delta}`
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${latitude}%2C${longitude}`
+}
+
+const getMapLink = ({ lat, lon }) =>
+  `https://www.openstreetmap.org/?mlat=${encodeURIComponent(lat)}&mlon=${encodeURIComponent(lon)}#map=17/${encodeURIComponent(lat)}/${encodeURIComponent(lon)}`
+
 function Header({ stage, onHome }) {
   const active = FLOW.findIndex(([key]) => key === stage)
   return (
@@ -88,6 +99,71 @@ function Input({ label, required, hint, error, full = false, children }) {
   )
 }
 
+function WarningNotice({ children }) {
+  return (
+    <div className="capacity-warning" role="note">
+      <span className="capacity-warning-icon" aria-hidden="true">
+        !
+      </span>
+      <p>{children}</p>
+    </div>
+  )
+}
+
+function VenueLocationCard({ location, status }) {
+  const hasLocation =
+    location && Number.isFinite(location.lat) && Number.isFinite(location.lon)
+
+  return (
+    <section className="venue-location" aria-labelledby="venue-location-title">
+      <div className="venue-location-head">
+        <div>
+          <h2 id="venue-location-title">참고 위치</h2>
+          <p>행사장의 위치를 지도로 확인해보세요.</p>
+        </div>
+        {status === 'loading' && <span className="venue-location-status">검색 중</span>}
+      </div>
+      {hasLocation ? (
+        <>
+          <div className="venue-map-wrap">
+            <iframe
+              title={`${location.name} 위치 지도`}
+              src={getMapEmbedUrl(location)}
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+          </div>
+          <div className="venue-location-foot">
+            <div className="venue-address">
+              <span className="venue-marker" aria-hidden="true">●</span>
+              <div>
+                <strong>{location.name}</strong>
+                <p>{location.address}</p>
+              </div>
+            </div>
+            <a
+              className="venue-map-link"
+              href={location.mapUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              지도에서 보기 <span aria-hidden="true">↗</span>
+            </a>
+          </div>
+        </>
+      ) : (
+        <div className="venue-location-empty" role="status">
+          {status === 'loading'
+            ? '행사장명을 기준으로 위치를 검색하고 있습니다.'
+            : status === 'error'
+              ? '행사장 위치를 찾지 못했습니다. 행사장명을 확인해 주세요.'
+              : '행사장명을 입력하면 검색된 위치가 표시됩니다.'}
+        </div>
+      )}
+    </section>
+  )
+}
+
 const themeLabel = (pair) =>
   `${FESTIVAL_TYPES[pair.type] || pair.type || '미입력'} · ${pair.topic || '미입력'}`
 const eventTypeLabel = (eventType) =>
@@ -95,7 +171,9 @@ const eventTypeLabel = (eventType) =>
 
 function FormScreen({ plan, setPlan, step, setStep, onReview }) {
   const [errors, setErrors] = useState([])
+  const [venueLocationStatus, setVenueLocationStatus] = useState('idle')
   const update = (k, v) => setPlan((p) => ({ ...p, [k]: v }))
+  const showVenueCapacityWarning = !String(plan.venueCapacity ?? '').trim()
   const pairs = plan.festivalThemes?.length
     ? plan.festivalThemes
     : [{ type: '', topic: '' }]
@@ -131,6 +209,67 @@ function FormScreen({ plan, setPlan, step, setStep, onReview }) {
           }
         : p,
     )
+
+  useEffect(() => {
+    const venue = plan.venue.trim()
+    if (!venue) {
+      setVenueLocationStatus('idle')
+      setPlan((p) => (p.venueLocation ? { ...p, venueLocation: null } : p))
+      return undefined
+    }
+
+    const controller = new AbortController()
+    const regionName = REGIONS[plan.region]?.name || ''
+    const queries = [
+      `${venue}, ${regionName}, 대한민국`,
+      `${venue}, 대한민국`,
+      venue,
+    ].filter((query, index, list) => query && list.indexOf(query) === index)
+    setVenueLocationStatus('loading')
+
+    const findVenue = async () => {
+      try {
+        let result = null
+        for (const query of queries) {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=kr&accept-language=ko&q=${encodeURIComponent(query)}`,
+            {
+              signal: controller.signal,
+              headers: { Accept: 'application/json' },
+            },
+          )
+          if (!response.ok) continue
+          const results = await response.json()
+          if (results.length) {
+            result = results[0]
+            break
+          }
+        }
+        if (!result) throw new Error('검색 결과가 없습니다.')
+
+        const location = {
+          name: venue,
+          address: result.display_name,
+          lat: Number(result.lat),
+          lon: Number(result.lon),
+          placeId: result.place_id,
+          mapUrl: getMapLink({ lat: result.lat, lon: result.lon }),
+        }
+        setPlan((p) => (p.venue.trim() === venue ? { ...p, venueLocation: location } : p))
+        setVenueLocationStatus('success')
+      } catch (error) {
+        if (error.name === 'AbortError') return
+        setPlan((p) => (p.venue.trim() === venue ? { ...p, venueLocation: null } : p))
+        setVenueLocationStatus('error')
+      }
+    }
+
+    const timer = window.setTimeout(findVenue, 450)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [plan.venue, plan.region, setPlan])
   const fillSample = () =>
     setPlan({
       ...SAMPLE,
@@ -369,7 +508,7 @@ function FormScreen({ plan, setPlan, step, setStep, onReview }) {
             </div>
           )}
           {step === 2 && (
-            <div className="fieldgrid">
+            <div className="fieldgrid event-place-grid">
               <Input label="개최 지역" required>
                 <select
                   value={plan.region}
@@ -402,9 +541,39 @@ function FormScreen({ plan, setPlan, step, setStep, onReview }) {
                   type="text"
                   value={plan.venue}
                   onChange={(e) => update('venue', e.target.value)}
-                  placeholder="예: 동강둔치 일원"
+                  placeholder="예: 동강둔치공원"
                 />
               </Input>
+              <Input full label="행사장 수용 규모" hint="최대 수용 인원 기준">
+                <input
+                  type="text"
+                  value={plan.venueCapacity || ''}
+                  onChange={(e) => update('venueCapacity', e.target.value)}
+                  placeholder="예: 500명, 500~1,000명, 미정"
+                />
+                {showVenueCapacityWarning && (
+                  <div className="capacity-warnings">
+                    <WarningNotice>
+                      기획안에서 수용 규모가 확인되지 않았습니다.
+                      <br />
+                      예상 수용 규모를 직접 입력해주세요.
+                    </WarningNotice>
+                    <WarningNotice>
+                      <strong>입력이 어려운 경우</strong>
+                      <br />
+                      정확한 수치를 모르는 경우, 예상 범위를 입력하거나 '미정'으로
+                      표시해도 분석이 가능합니다.
+                      <br />
+                      (단, 수용 규모가 없을 경우 일부 분석의 정확도가 낮아질 수
+                      있습니다.)
+                    </WarningNotice>
+                  </div>
+                )}
+              </Input>
+              <VenueLocationCard
+                location={plan.venueLocation}
+                status={venueLocationStatus}
+              />
               <Input
                 label="개최 시작일"
                 required
@@ -425,16 +594,6 @@ function FormScreen({ plan, setPlan, step, setStep, onReview }) {
                   type="date"
                   value={plan.end}
                   onChange={(e) => update('end', e.target.value)}
-                />
-              </Input>
-              <Input full label="확보 주차면수" hint="접근성 판단에 사용">
-                <input
-                  type="number"
-                  min="0"
-                  step="50"
-                  value={plan.parking || ''}
-                  onChange={(e) => update('parking', Number(e.target.value))}
-                  placeholder="1150"
                 />
               </Input>
             </div>
@@ -583,7 +742,7 @@ function ReviewScreen({ plan, onEdit, onAnalyze }) {
         </small>
       </>,
     ],
-    ['확보 주차면수', `${fmt(plan.parking)}면`],
+    ['행사장 수용 규모', plan.venueCapacity || '미정'],
     [
       '프로그램 구성',
       PROGRAMS.filter((p) => plan.programs.includes(p.id))
@@ -1333,31 +1492,22 @@ function getDetailHtml(item, A) {
       sec(
         1,
         '핵심 지표',
-        `<div class="metricrow c2">${mt('적합성 점수', `${v.s3}<small>/100</small>`, '평상시 25% · 월별 50% · 접근성 25%', true)}${mt(`${m + 1}월 관광수요 지수`, v.mIdx, `연중 ${v.mRank}위 (연평균 100)`)}${mt('평상시 지역 관광수요', `${R.baseDemand}<small>/100</small>`, `${R.annual} · ${R.baseNote}`)}${mt('행사장 접근성', `${v.accScore}<small>/100</small>`, `대중교통 ${ac.transitScore} · 주차 충족률 ${Math.round(v.parkRatio * 100)}%`)}</div>`,
+        `<div class="metricrow c2">${mt('적합성 점수', `${v.s3}<small>/100</small>`, '평상시 25% · 월별 50% · 접근성 25%', true)}${mt(`${m + 1}월 관광수요 지수`, v.mIdx, `연중 ${v.mRank}위 (연평균 100)`)}${mt('평상시 지역 관광수요', `${R.baseDemand}<small>/100</small>`, `${R.annual} · ${R.baseNote}`)}${mt('행사장 접근성', `${v.accScore}<small>/100</small>`, `대중교통 ${ac.transitScore} · ${ac.transitNote}`)}</div>`,
       ) +
       sec(
         2,
         '판단 근거 및 데이터',
-        `<div class="vizbox">${vBars(MONTHS, R.monthly, m, { ref: 100, refLabel: '연평균 100' })}<p class="vizcap">${R.name}의 최근 5년 월별 관광수요 지수(연평균 100 기준). 개최 월 ${m + 1}월은 ${v.mIdx}로 연중 ${v.mRank}위입니다.</p></div><div class="vizbox" style="margin-top:10px"><div class="metricrow c2" style="gap:8px">${mt('서울 도심 기준 이동', ac.car, `약 ${ac.km}km`)}${mt('철도', ac.train, ac.station)}${mt('확보 주차면수', `${fmt(p.parking)}<small>면</small>`, `권장 ${fmt(v.parkNeed)}면 · 충족률 ${Math.round(v.parkRatio * 100)}%`)}${mt('대중교통 접근성', `${ac.transitScore}<small>/100</small>`, ac.transitNote)}</div><p class="vizcap">권장 주차면수는 일평균 ${fmt(A.daily)}명 · 자가용 분담 60% · 동승 2.8명 · 회전율 3.5회를 적용한 값입니다.</p></div><div class="metricrow c2" style="margin-top:10px">${mt('외지인 방문 비율', `${R.outRatio}<small>%</small>`, '지역 내 소비 유발 기반')}${mt('체류형 방문 비율', `${R.stayRatio}<small>%</small>`, '숙박을 동반한 방문')}</div>`,
+        `<div class="vizbox">${vBars(MONTHS, R.monthly, m, { ref: 100, refLabel: '연평균 100' })}<p class="vizcap">${R.name}의 최근 5년 월별 관광수요 지수(연평균 100 기준). 개최 월 ${m + 1}월은 ${v.mIdx}로 연중 ${v.mRank}위입니다.</p></div><div class="vizbox" style="margin-top:10px"><div class="metricrow c2" style="gap:8px">${mt('서울 도심 기준 이동', ac.car, `약 ${ac.km}km`)}${mt('철도', ac.train, ac.station)}${mt('권장 주차면수', `${fmt(v.parkNeed)}<small>면</small>`, '목표 방문객 기반 산출')}${mt('대중교통 접근성', `${ac.transitScore}<small>/100</small>`, ac.transitNote)}</div><p class="vizcap">권장 주차면수는 일평균 ${fmt(A.daily)}명 · 자가용 분담 60% · 동승 2.8명 · 회전율 3.5회를 적용한 값입니다.</p></div><div class="metricrow c2" style="margin-top:10px">${mt('외지인 방문 비율', `${R.outRatio}<small>%</small>`, '지역 내 소비 유발 기반')}${mt('체류형 방문 비율', `${R.stayRatio}<small>%</small>`, '숙박을 동반한 방문')}</div>`,
       ) +
       sec(
         3,
         '결과 해석',
-        `<div class="readbox read"><p>${R.name}의 평상시 관광수요는 ${R.baseDemand}점으로 ${R.baseNote}입니다. 반면 개최 월인 ${m + 1}월은 지수 ${v.mIdx}로 연중 ${v.mRank}위여서, <strong>시기 선택 자체는 ${v.mIdx >= 115 ? '유리' : '무난'}합니다</strong>.</p><p>${v.accScore < 60 ? `전체 점수를 낮추는 요인은 접근성입니다. 주차 충족률 ${Math.round(v.parkRatio * 100)}%, 대중교통 ${ac.transitScore}점으로, ${ac.transitNote}. 목표 방문객이 몰리는 피크 시간대에 진입 동선이 병목이 될 수 있습니다.` : `접근성도 ${v.accScore}점으로 무리가 없어, 지역·시기 조합에서 큰 제약은 확인되지 않습니다.`}</p></div>`,
+        `<div class="readbox read"><p>${R.name}의 평상시 관광수요는 ${R.baseDemand}점으로 ${R.baseNote}입니다. 반면 개최 월인 ${m + 1}월은 지수 ${v.mIdx}로 연중 ${v.mRank}위여서, <strong>시기 선택 자체는 ${v.mIdx >= 115 ? '유리' : '무난'}합니다</strong>.</p><p>${v.accScore < 60 ? `전체 점수를 낮추는 요인은 접근성입니다. 대중교통 ${ac.transitScore}점으로, ${ac.transitNote}. 목표 방문객이 몰리는 피크 시간대에 진입 동선이 병목이 될 수 있습니다.` : `접근성도 ${v.accScore}점으로 무리가 없어, 지역·시기 조합에서 큰 제약은 확인되지 않습니다.`}</p></div>`,
       ) +
       sec(
         4,
         '권장 수정사항',
         recs([
-          ...(v.parkRatio < 0.9
-            ? [
-                {
-                  p: v.parkRatio < 0.7 ? 1 : 2,
-                  t: `외곽 임시주차장 ${fmt(Math.max(0, v.parkNeed - p.parking))}면 확보 + 셔틀 연계`,
-                  d: `현재 ${fmt(p.parking)}면으로 권장 ${fmt(v.parkNeed)}면의 ${Math.round(v.parkRatio * 100)}% 수준입니다. 행사장 인접 확보가 어렵다면 외곽 2~3개소로 분산하고 10분 간격 셔틀로 연결하는 방식이 일반적입니다.`,
-                },
-              ]
-            : []),
           ...(ac.transitScore < 65
             ? [
                 {
@@ -1788,9 +1938,10 @@ export default function App() {
       region: 'yeongwol',
       venueType: 'outdoor',
       venue: '',
+      venueLocation: null,
+      venueCapacity: '',
       start: '',
       end: '',
-      parking: 0,
       programs: [],
       outdoor: 85,
       rainplan: 'partial',

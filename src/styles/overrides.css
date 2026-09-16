@@ -5,6 +5,90 @@
 .alert.show {
   display: block;
 }
+.capacity-warnings {
+  display: grid;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+/* Step 2 layout: preserve each existing field while placing the fields in
+   the requested four-row order. */
+.event-place-grid > .field:nth-child(1) {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+.event-place-grid > .field:nth-child(6) {
+  grid-column: 1;
+  grid-row: 2;
+}
+.event-place-grid > .field:nth-child(7) {
+  grid-column: 2;
+  grid-row: 2;
+}
+.event-place-grid > .field:nth-child(2) {
+  grid-column: 1;
+  grid-row: 3;
+}
+.event-place-grid > .field:nth-child(3) {
+  grid-column: 2;
+  grid-row: 3;
+}
+.event-place-grid > .field:nth-child(4) {
+  grid-column: 1;
+  grid-row: 4;
+}
+.event-place-grid > .venue-location {
+  grid-column: 2;
+  grid-row: 4;
+}
+
+@media (max-width: 1180px) {
+  .event-place-grid > .field,
+  .event-place-grid > .venue-location {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .event-place-grid > .field:nth-child(1) { order: 1; }
+  .event-place-grid > .field:nth-child(6) { order: 2; }
+  .event-place-grid > .field:nth-child(7) { order: 3; }
+  .event-place-grid > .field:nth-child(2) { order: 4; }
+  .event-place-grid > .field:nth-child(3) { order: 5; }
+  .event-place-grid > .field:nth-child(4) { order: 6; }
+  .event-place-grid > .venue-location { order: 7; }
+}
+
+.capacity-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 13px;
+  border: 1px solid #f1d36a;
+  border-radius: var(--r);
+  background: #fff9d9;
+  color: #8a6500;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.capacity-warning-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 17px;
+  width: 17px;
+  height: 17px;
+  margin-top: 2px;
+  border-radius: 50%;
+  background: #d99f00;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+.capacity-warning p {
+  margin: 0;
+}
+.capacity-warning strong {
+  font-weight: 700;
+}
 .rv .v small {
   font-weight: 500;
   color: var(--muted);
@@ -198,6 +282,102 @@
   flex-direction: column;
   gap: 3px;
 }
+
+.venue-location {
+  grid-column: 1 / -1;
+  padding-top: 2px;
+}
+.venue-location-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 9px;
+}
+.venue-location-head h2 {
+  color: var(--ink2);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.venue-location-head p {
+  color: var(--muted);
+  font-size: 11.5px;
+  margin-top: 4px;
+}
+.venue-location-status {
+  color: var(--brand);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.venue-map-wrap {
+  height: 226px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--paper);
+}
+.venue-map-wrap iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+.venue-location-foot {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 2px 0;
+}
+.venue-address {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.venue-marker {
+  color: var(--brand);
+  font-size: 15px;
+  line-height: 1.1;
+}
+.venue-address strong {
+  color: var(--ink2);
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+}
+.venue-address p {
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.45;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+}
+.venue-map-link {
+  color: var(--brand);
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.venue-map-link:hover {
+  text-decoration: underline;
+}
+.venue-location-empty {
+  align-items: center;
+  background: var(--paper);
+  border: 1px dashed var(--line);
+  border-radius: var(--r);
+  color: var(--muted);
+  display: flex;
+  font-size: 12px;
+  justify-content: center;
+  min-height: 104px;
+  padding: 18px;
+  text-align: center;
+}
+
 @media (max-width: 560px) {
   .theme-pair-fields {
     grid-template-columns: 1fr;
@@ -279,6 +459,15 @@
     flex: 1;
     padding: 0 12px;
     font-size: 13px;
+  }
+}
+@media (max-width: 560px) {
+  .venue-map-wrap {
+    height: 190px;
+  }
+  .venue-location-foot {
+    flex-direction: column;
+    gap: 9px;
   }
 }
 .event-type-and-history {
