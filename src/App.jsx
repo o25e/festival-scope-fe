@@ -508,7 +508,7 @@ function FormScreen({ plan, setPlan, step, setStep, onReview }) {
             </div>
           )}
           {step === 2 && (
-            <div className="fieldgrid">
+            <div className="fieldgrid event-place-grid">
               <Input label="개최 지역" required>
                 <select
                   value={plan.region}

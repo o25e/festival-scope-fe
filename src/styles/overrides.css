@@ -10,6 +10,53 @@
   gap: 8px;
   margin-top: 2px;
 }
+
+/* Step 2 layout: preserve each existing field while placing the fields in
+   the requested four-row order. */
+.event-place-grid > .field:nth-child(1) {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+.event-place-grid > .field:nth-child(6) {
+  grid-column: 1;
+  grid-row: 2;
+}
+.event-place-grid > .field:nth-child(7) {
+  grid-column: 2;
+  grid-row: 2;
+}
+.event-place-grid > .field:nth-child(2) {
+  grid-column: 1;
+  grid-row: 3;
+}
+.event-place-grid > .field:nth-child(3) {
+  grid-column: 2;
+  grid-row: 3;
+}
+.event-place-grid > .field:nth-child(4) {
+  grid-column: 1;
+  grid-row: 4;
+}
+.event-place-grid > .venue-location {
+  grid-column: 2;
+  grid-row: 4;
+}
+
+@media (max-width: 1180px) {
+  .event-place-grid > .field,
+  .event-place-grid > .venue-location {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .event-place-grid > .field:nth-child(1) { order: 1; }
+  .event-place-grid > .field:nth-child(6) { order: 2; }
+  .event-place-grid > .field:nth-child(7) { order: 3; }
+  .event-place-grid > .field:nth-child(2) { order: 4; }
+  .event-place-grid > .field:nth-child(3) { order: 5; }
+  .event-place-grid > .field:nth-child(4) { order: 6; }
+  .event-place-grid > .venue-location { order: 7; }
+}
+
 .capacity-warning {
   display: flex;
   align-items: flex-start;
