@@ -11,6 +11,31 @@ export const THEMES = {
   marine: { name: '해양 · 워터 액티비티', kw: '해변, 수상 레저, 해양 체험', series: [58, 64, 72, 77, 83], detail: [{ k: '수상 레저 체험', v: [52, 61, 72, 80, 88], d: '상승' }, { k: '해변 야간 프로그램', v: [44, 53, 64, 74, 85], d: '상승' }, { k: '서핑', v: [68, 72, 76, 78, 81], d: '상승' }, { k: '갯벌 체험', v: [74, 72, 70, 69, 68], d: '유지' }], sims: [{ n: '고성 서핑비치 페스타', reg: '강원 고성', days: 4, series: [46000, 55000, 66000, 74000, 83000] }, { n: '태안 바다레저위크', reg: '충남 태안', days: 5, series: [72000, 81000, 92000, 101000, 110000] }, { n: '거제 씨사이드 페스타', reg: '경남 거제', days: 3, series: [38000, 44000, 52000, 58000, 64000] }, { n: '옹진 섬바다 축제', reg: '인천 옹진', days: 4, series: [29000, 34000, 40000, 45000, 50000] }] },
 }
 
+export const FESTIVAL_TYPES = {
+  culture: '문화·예술',
+  food: '음식·미식',
+  nature: '자연·생태',
+  history: '역사·전통',
+  music: '음악·공연',
+  family: '가족·체험'
+}
+
+export function getThemeForTopic(topic) {
+  const value = String(topic || '').trim().toLowerCase()
+  const match = Object.entries(THEMES).find(([key, theme]) =>
+    value === key || value === theme.name.toLowerCase() || value.includes(key) || theme.name.toLowerCase().includes(value)
+  )
+  if (match) return match[1]
+  if (value.includes('별빛') || value.includes('천문')) return THEMES.starlight
+  if (value.includes('미식') || value.includes('음식') || value.includes('푸드')) return THEMES.localfood
+  if (value.includes('캐릭터') || value.includes('애니')) return THEMES.character
+  if (value.includes('전통') || value.includes('민속')) return THEMES.tradition
+  if (value.includes('음악') || value.includes('공연')) return THEMES.music
+  if (value.includes('꽃') || value.includes('계절')) return THEMES.flower
+  if (value.includes('바다') || value.includes('해양')) return THEMES.marine
+  return THEMES.starlight
+}
+
 export const PROGRAMS = [{ id: 'media', n: '야간 미디어아트 산책로', out: true, night: true }, { id: 'astro', n: '천문 관측 체험', out: true, night: true, fog: true }, { id: 'drone', n: '드론 라이트쇼', out: true, night: true, wind: true }, { id: 'market', n: '로컬푸드 야시장', out: true, night: true }, { id: 'stage', n: '버스킹 · 야외 공연', out: true, wind: true }, { id: 'expo', n: '실내 전시 · 체험관', out: false }, { id: 'parade', n: '거리 퍼레이드', out: true }, { id: 'kids', n: '가족 · 어린이 체험존', out: true }, { id: 'water', n: '수상 · 물놀이 체험', out: true }, { id: 'craft', n: '공예 · 만들기 워크숍', out: false }]
 
 const region = (data) => data
@@ -22,7 +47,7 @@ export const REGIONS = {
   boryeong: region({ name: '충남 보령시', annual: '연 1,020만 명', baseDemand: 74, baseNote: '전국 기초지자체 상위 20% 구간', outRatio: 85, stayRatio: 38, monthly: [55, 58, 72, 88, 110, 120, 196, 210, 96, 78, 62, 55], access: { car: '서울 도심 기준 2시간 15분', km: 168, station: '대천역 · 행사장까지 차량 9분', train: '용산–대천 무궁화호 1일 14회', bus: '센트럴시티–보령 고속버스 1일 21회', transitScore: 69, transitNote: '서해선 개통으로 개선, 해수욕장 구간 성수기 정체' }, poi: { r5: { tour: 16, food: 404, stay: 238, rooms: 6100 }, r15: { tour: 28, food: 596, stay: 312, rooms: 7800 } }, poiList: [{ n: '대천해수욕장', t: '관광지', km: .5, note: '행사장 인접' }, { n: '머드광장 상가', t: '상권', km: .8, note: '점포 142개' }, { n: '무창포 신비의바닷길', t: '관광지', km: 14.2, note: '물때 연계 프로그램 가능' }, { n: '대천항 수산시장', t: '상권', km: 5.4, note: '점포 88개' }, { n: '대천 리조트 지구', t: '숙박', km: 1, note: '객실 3,200실' }], weather: { rainYears: [2, 3, 4, 5, 6, 8, 9, 8, 5, 4, 4, 3], heavyYears: [0, 1, 1, 2, 3, 6, 8, 7, 4, 2, 1, 1], windYears: [8, 8, 8, 7, 5, 4, 5, 6, 6, 6, 7, 8], fogYears: [3, 4, 6, 7, 8, 8, 7, 5, 4, 3, 3, 3], nightLow: [-4.6, -2.4, 2, 7.4, 12.6, 17.4, 22, 22.6, 17.8, 11, 4.4, -2], diurnal: [9.4, 10, 10.8, 11.4, 10.8, 8.8, 7, 7.4, 9.2, 10.2, 9.8, 9.2], note: '보령 해안 관측지점 기준 · 최근 10년' }, localSim: { n: '보령 서해바다 페스타', reg: '충남 보령 (동일 지역)', days: 4, series: [68000, 74000, 80000, 85000, 90000] }, events: [{ n: '보령 머드축제', reg: '충남 보령', km: 1, s: '07-17', e: '07-26', held: 5, scale: 2100000 }, { n: '서천 홍원항 수산축제', reg: '충남 서천', km: 33, s: '10-16', e: '10-18', held: 5, scale: 44000 }, { n: '태안 가을정원 페스타', reg: '충남 태안', km: 46, s: '10-09', e: '10-13', held: 4, scale: 57000 }, { n: '홍성 내포문화축제', reg: '충남 홍성', km: 38, s: '10-23', e: '10-25', held: 4, scale: 36000 }, { n: '부여 서동연꽃축제', reg: '충남 부여', km: 42, s: '07-10', e: '07-13', held: 5, scale: 62000 }] }),
 }
 
-export const SAMPLE = { name: '영월 가을별빛 야행축제', org: '강원특별자치도 영월군', theme: 'starlight', target: 120000, edition: '1', region: 'yeongwol', venuetype: 'outdoor', venueType: 'outdoor', venue: '동강둔치 일원', start: '2027-10-15', end: '2027-10-18', parking: 1150, programs: ['media', 'astro', 'drone', 'market', 'stage'], outdoor: 85, rainplan: 'partial', shelter: 300 }
+export const SAMPLE = { name: '영월 가을별빛 야행축제', org: '강원특별자치도 영월군', festivalThemes: [{ type: 'nature', topic: '별빛·천문' }, { type: 'culture', topic: '야간 문화 체험' }], eventType: 'existing', firstHeldYear: 2018, target: 120000, region: 'yeongwol', venuetype: 'outdoor', venueType: 'outdoor', venue: '동강둔치 일원', start: '2027-10-15', end: '2027-10-18', parking: 1150, programs: ['media', 'astro', 'drone', 'market', 'stage'], outdoor: 85, rainplan: 'partial', shelter: 300 }
 export const FLOW = [['input', '기획안 입력'], ['review', '입력 확인'], ['loading', '분석'], ['result', '분석 결과'], ['report', '최종 리포트']]
 export const ANALYSIS_STEPS = ['유사 축제 실적 조회', '주제 키워드 관심도 추이 분석', '지역 월별 관광수요·접근성 집계', '인접 권역 행사 이력 대조', '과거 동일 시기 기상 통계 집계', '행사장 주변 POI 분석']
 
@@ -32,10 +57,10 @@ const dparse = (s) => { const [y, m, d] = s.split('-').map(Number); return new D
 const ddiff = (a, b) => Math.round((b - a) / 864e5)
 const dadd = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x }
 export function analyze(p) {
-  const R = REGIONS[p.region] || REGIONS.yeongwol, T = THEMES[p.theme] || THEMES.starlight, sd = dparse(p.start), ed = dparse(p.end), days = Math.max(1, ddiff(sd, ed) + 1), daily = p.target / days, m = sd.getMonth(), progs = PROGRAMS.filter(x => p.programs.includes(x.id))
+  const R = REGIONS[p.region] || REGIONS.yeongwol, topicPairs = p.festivalThemes?.length ? p.festivalThemes : [{ type: '', topic: '' }], baseTheme = getThemeForTopic(topicPairs[0].topic), eventTypeLabel = p.eventType === 'new' ? '신규 개최' : '기존 개최', firstHeldYear = p.eventType === 'existing' ? p.firstHeldYear : null, historyLabel = firstHeldYear ? ` · 최초 개최 ${firstHeldYear}년` : '', T = { ...baseTheme, name: `${topicPairs.map((pair) => `${FESTIVAL_TYPES[pair.type] || pair.type || '미분류'} · ${pair.topic || '미입력'}`).join(' / ') || baseTheme.name} · ${eventTypeLabel}${historyLabel}` }, sd = dparse(p.start), ed = dparse(p.end), days = Math.max(1, ddiff(sd, ed) + 1), daily = p.target / days, m = sd.getMonth(), progs = PROGRAMS.filter(x => p.programs.includes(x.id))
   const sims = [...T.sims, R.localSim], last = sims.map(s => s.series[4]).sort((a, b) => a - b), median = last[Math.floor(last.length / 2)], avg = last.reduce((a, b) => a + b, 0) / last.length, top = last[last.length - 1], ratio = p.target / median, yearAvg = YEARS.map((_, i) => sims.reduce((a, s) => a + s.series[i], 0) / sims.length), simCagr = Math.pow(yearAvg[4] / yearAvg[0], 1 / 4) - 1
   let s1, v1; if (ratio > 1.3) { s1 = clamp(100 - 120 * (ratio - 1.3), 25, 88); v1 = '과다 설정' } else if (ratio >= .8) { s1 = clamp(92 - 14 * Math.abs(ratio - 1), 80, 92); v1 = '적정 범위' } else if (ratio >= .5) { s1 = clamp(72 + 30 * (ratio - .5), 72, 80); v1 = '보수적 설정' } else { s1 = 68; v1 = '과소 설정' }
-  if (p.edition == 1 && ratio > 1.1) s1 = clamp(s1 - 6, 20, 92); s1 = Math.round(s1)
+  if (p.eventType === 'new' && ratio > 1.1) s1 = clamp(s1 - 6, 20, 92); s1 = Math.round(s1)
   const rec1 = { first: roundTo(median * 1.1, 5000), stretch: roundTo(top * 1.15, 5000) }, tCagr = Math.pow(T.series[4] / T.series[0], 1 / 4) - 1, s2 = Math.round(clamp(62 + 120 * tCagr, 28, 95)), v2 = tCagr > .06 ? '상승' : tCagr > -.03 ? '유지' : '하락'
   const mIdx = R.monthly[m], mScore = clamp((mIdx - 60) / 90 * 100, 0, 100), mRank = [...R.monthly].sort((a, b) => b - a).indexOf(mIdx) + 1, parkNeed = Math.ceil(daily * .6 / 2.8 / 3.5), parkRatio = p.parking / parkNeed, accScore = Math.round(R.access.transitScore * .5 + clamp(parkRatio, 0, 1) * 100 * .5), s3 = Math.round(.25 * R.baseDemand + .5 * mScore + .25 * accScore), v3 = s3 >= 78 ? '적합' : s3 >= 62 ? '조건부 적합' : '보완 필요'
   const yr = sd.getFullYear(), evRange = (e, off = 0) => { const [sm, sday] = e.s.split('-').map(Number), [em, eday] = e.e.split('-').map(Number); let a = new Date(yr, sm - 1, sday), b = new Date(yr, em - 1, eday); if (b < a) b = new Date(yr + 1, em - 1, eday); return [dadd(a, off), dadd(b, off)] }, gapOf = (a1, a2, b1, b2) => (a1 <= b2 && b1 <= a2) ? 0 : (b1 > a2 ? ddiff(a2, b1) : ddiff(b2, a1))
