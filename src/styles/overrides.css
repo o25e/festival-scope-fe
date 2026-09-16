@@ -5,6 +5,43 @@
 .alert.show {
   display: block;
 }
+.capacity-warnings {
+  display: grid;
+  gap: 8px;
+  margin-top: 2px;
+}
+.capacity-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 13px;
+  border: 1px solid #f1d36a;
+  border-radius: var(--r);
+  background: #fff9d9;
+  color: #8a6500;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.capacity-warning-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 17px;
+  width: 17px;
+  height: 17px;
+  margin-top: 2px;
+  border-radius: 50%;
+  background: #d99f00;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+.capacity-warning p {
+  margin: 0;
+}
+.capacity-warning strong {
+  font-weight: 700;
+}
 .rv .v small {
   font-weight: 500;
   color: var(--muted);

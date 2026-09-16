@@ -99,6 +99,17 @@ function Input({ label, required, hint, error, full = false, children }) {
   )
 }
 
+function WarningNotice({ children }) {
+  return (
+    <div className="capacity-warning" role="note">
+      <span className="capacity-warning-icon" aria-hidden="true">
+        !
+      </span>
+      <p>{children}</p>
+    </div>
+  )
+}
+
 function VenueLocationCard({ location, status }) {
   const hasLocation =
     location && Number.isFinite(location.lat) && Number.isFinite(location.lon)
@@ -162,6 +173,7 @@ function FormScreen({ plan, setPlan, step, setStep, onReview }) {
   const [errors, setErrors] = useState([])
   const [venueLocationStatus, setVenueLocationStatus] = useState('idle')
   const update = (k, v) => setPlan((p) => ({ ...p, [k]: v }))
+  const showVenueCapacityWarning = !String(plan.venueCapacity ?? '').trim()
   const pairs = plan.festivalThemes?.length
     ? plan.festivalThemes
     : [{ type: '', topic: '' }]
@@ -537,11 +549,26 @@ function FormScreen({ plan, setPlan, step, setStep, onReview }) {
                   type="text"
                   value={plan.venueCapacity || ''}
                   onChange={(e) => update('venueCapacity', e.target.value)}
-                  onBlur={(e) => {
-                    if (!e.target.value.trim()) update('venueCapacity', '미정')
-                  }}
                   placeholder="예: 500명, 500~1,000명, 미정"
                 />
+                {showVenueCapacityWarning && (
+                  <div className="capacity-warnings">
+                    <WarningNotice>
+                      기획안에서 수용 규모가 확인되지 않았습니다.
+                      <br />
+                      예상 수용 규모를 직접 입력해주세요.
+                    </WarningNotice>
+                    <WarningNotice>
+                      <strong>입력이 어려운 경우</strong>
+                      <br />
+                      정확한 수치를 모르는 경우, 예상 범위를 입력하거나 '미정'으로
+                      표시해도 분석이 가능합니다.
+                      <br />
+                      (단, 수용 규모가 없을 경우 일부 분석의 정확도가 낮아질 수
+                      있습니다.)
+                    </WarningNotice>
+                  </div>
+                )}
               </Input>
               <VenueLocationCard
                 location={plan.venueLocation}
@@ -1912,7 +1939,7 @@ export default function App() {
       venueType: 'outdoor',
       venue: '',
       venueLocation: null,
-      venueCapacity: '미정',
+      venueCapacity: '',
       start: '',
       end: '',
       programs: [],
