@@ -898,6 +898,7 @@ export const SAMPLE = {
   venuetype: 'outdoor',
   venueType: 'outdoor',
   venue: '동강둔치 일원',
+  venueCapacity: '미정',
   start: '2027-10-15',
   end: '2027-10-18',
   parking: 1150,

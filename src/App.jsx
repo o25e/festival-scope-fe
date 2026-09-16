@@ -405,6 +405,17 @@ function FormScreen({ plan, setPlan, step, setStep, onReview }) {
                   placeholder="예: 동강둔치 일원"
                 />
               </Input>
+              <Input full label="행사장 수용 규모" hint="최대 수용 인원 기준">
+                <input
+                  type="text"
+                  value={plan.venueCapacity || ''}
+                  onChange={(e) => update('venueCapacity', e.target.value)}
+                  onBlur={(e) => {
+                    if (!e.target.value.trim()) update('venueCapacity', '미정')
+                  }}
+                  placeholder="예: 500명, 500~1,000명, 미정"
+                />
+              </Input>
               <Input
                 label="개최 시작일"
                 required
@@ -583,6 +594,7 @@ function ReviewScreen({ plan, onEdit, onAnalyze }) {
         </small>
       </>,
     ],
+    ['행사장 수용 규모', plan.venueCapacity || '미정'],
     ['확보 주차면수', `${fmt(plan.parking)}면`],
     [
       '프로그램 구성',
@@ -1788,6 +1800,7 @@ export default function App() {
       region: 'yeongwol',
       venueType: 'outdoor',
       venue: '',
+      venueCapacity: '미정',
       start: '',
       end: '',
       parking: 0,
