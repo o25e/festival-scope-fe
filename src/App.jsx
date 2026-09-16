@@ -26,6 +26,17 @@ const dparse = (s) => {
 }
 const levelClass = (level) => `pill ${level}`
 
+const getMapEmbedUrl = ({ lat, lon }) => {
+  const latitude = Number(lat)
+  const longitude = Number(lon)
+  const delta = 0.015
+  const bbox = `${longitude - delta},${latitude - delta},${longitude + delta},${latitude + delta}`
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${latitude}%2C${longitude}`
+}
+
+const getMapLink = ({ lat, lon }) =>
+  `https://www.openstreetmap.org/?mlat=${encodeURIComponent(lat)}&mlon=${encodeURIComponent(lon)}#map=17/${encodeURIComponent(lat)}/${encodeURIComponent(lon)}`
+
 function Header({ stage, onHome }) {
   const active = FLOW.findIndex(([key]) => key === stage)
   return (
@@ -88,6 +99,60 @@ function Input({ label, required, hint, error, full = false, children }) {
   )
 }
 
+function VenueLocationCard({ location, status }) {
+  const hasLocation =
+    location && Number.isFinite(location.lat) && Number.isFinite(location.lon)
+
+  return (
+    <section className="venue-location" aria-labelledby="venue-location-title">
+      <div className="venue-location-head">
+        <div>
+          <h2 id="venue-location-title">참고 위치</h2>
+          <p>행사장의 위치를 지도로 확인해보세요.</p>
+        </div>
+        {status === 'loading' && <span className="venue-location-status">검색 중</span>}
+      </div>
+      {hasLocation ? (
+        <>
+          <div className="venue-map-wrap">
+            <iframe
+              title={`${location.name} 위치 지도`}
+              src={getMapEmbedUrl(location)}
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+          </div>
+          <div className="venue-location-foot">
+            <div className="venue-address">
+              <span className="venue-marker" aria-hidden="true">●</span>
+              <div>
+                <strong>{location.name}</strong>
+                <p>{location.address}</p>
+              </div>
+            </div>
+            <a
+              className="venue-map-link"
+              href={location.mapUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              지도에서 보기 <span aria-hidden="true">↗</span>
+            </a>
+          </div>
+        </>
+      ) : (
+        <div className="venue-location-empty" role="status">
+          {status === 'loading'
+            ? '행사장명을 기준으로 위치를 검색하고 있습니다.'
+            : status === 'error'
+              ? '행사장 위치를 찾지 못했습니다. 행사장명을 확인해 주세요.'
+              : '행사장명을 입력하면 검색된 위치가 표시됩니다.'}
+        </div>
+      )}
+    </section>
+  )
+}
+
 const themeLabel = (pair) =>
   `${FESTIVAL_TYPES[pair.type] || pair.type || '미입력'} · ${pair.topic || '미입력'}`
 const eventTypeLabel = (eventType) =>
@@ -95,6 +160,7 @@ const eventTypeLabel = (eventType) =>
 
 function FormScreen({ plan, setPlan, step, setStep, onReview }) {
   const [errors, setErrors] = useState([])
+  const [venueLocationStatus, setVenueLocationStatus] = useState('idle')
   const update = (k, v) => setPlan((p) => ({ ...p, [k]: v }))
   const pairs = plan.festivalThemes?.length
     ? plan.festivalThemes
@@ -131,6 +197,67 @@ function FormScreen({ plan, setPlan, step, setStep, onReview }) {
           }
         : p,
     )
+
+  useEffect(() => {
+    const venue = plan.venue.trim()
+    if (!venue) {
+      setVenueLocationStatus('idle')
+      setPlan((p) => (p.venueLocation ? { ...p, venueLocation: null } : p))
+      return undefined
+    }
+
+    const controller = new AbortController()
+    const regionName = REGIONS[plan.region]?.name || ''
+    const queries = [
+      `${venue}, ${regionName}, 대한민국`,
+      `${venue}, 대한민국`,
+      venue,
+    ].filter((query, index, list) => query && list.indexOf(query) === index)
+    setVenueLocationStatus('loading')
+
+    const findVenue = async () => {
+      try {
+        let result = null
+        for (const query of queries) {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=kr&accept-language=ko&q=${encodeURIComponent(query)}`,
+            {
+              signal: controller.signal,
+              headers: { Accept: 'application/json' },
+            },
+          )
+          if (!response.ok) continue
+          const results = await response.json()
+          if (results.length) {
+            result = results[0]
+            break
+          }
+        }
+        if (!result) throw new Error('검색 결과가 없습니다.')
+
+        const location = {
+          name: venue,
+          address: result.display_name,
+          lat: Number(result.lat),
+          lon: Number(result.lon),
+          placeId: result.place_id,
+          mapUrl: getMapLink({ lat: result.lat, lon: result.lon }),
+        }
+        setPlan((p) => (p.venue.trim() === venue ? { ...p, venueLocation: location } : p))
+        setVenueLocationStatus('success')
+      } catch (error) {
+        if (error.name === 'AbortError') return
+        setPlan((p) => (p.venue.trim() === venue ? { ...p, venueLocation: null } : p))
+        setVenueLocationStatus('error')
+      }
+    }
+
+    const timer = window.setTimeout(findVenue, 450)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [plan.venue, plan.region, setPlan])
   const fillSample = () =>
     setPlan({
       ...SAMPLE,
@@ -402,7 +529,7 @@ function FormScreen({ plan, setPlan, step, setStep, onReview }) {
                   type="text"
                   value={plan.venue}
                   onChange={(e) => update('venue', e.target.value)}
-                  placeholder="예: 동강둔치 일원"
+                  placeholder="예: 동강둔치공원"
                 />
               </Input>
               <Input full label="행사장 수용 규모" hint="최대 수용 인원 기준">
@@ -416,6 +543,10 @@ function FormScreen({ plan, setPlan, step, setStep, onReview }) {
                   placeholder="예: 500명, 500~1,000명, 미정"
                 />
               </Input>
+              <VenueLocationCard
+                location={plan.venueLocation}
+                status={venueLocationStatus}
+              />
               <Input
                 label="개최 시작일"
                 required
@@ -1800,6 +1931,7 @@ export default function App() {
       region: 'yeongwol',
       venueType: 'outdoor',
       venue: '',
+      venueLocation: null,
       venueCapacity: '미정',
       start: '',
       end: '',
