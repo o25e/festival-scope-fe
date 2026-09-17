@@ -1,0 +1,544 @@
+import { Button } from '../../components/ui'
+import { MONTHS, YEARS } from '../../data/prototype'
+import { dadd, dparse, dfmt, fmt, levelClass, round1 } from '../../utils/formatters'
+import { ITEMS, cardData } from './analysisData'
+
+const mt = (label, value, detail, highlight = false) =>
+  `<div class="metric ${highlight ? 'hl' : ''}"><div class="lbl">${label}</div><div class="mv">${value}</div>${detail ? `<div class="md">${detail}</div>` : ''}</div>`
+const sec = (n, title, html) =>
+  `<div class="sect"><div class="sect-h"><b>${n}</b><h4>${title}</h4><span class="line"></span></div>${html}</div>`
+const recs = (list) =>
+  `<div class="recs">${list.map((r) => `<div class="rec"><span class="pri p${r.p}">${r.p === 1 ? '즉시' : r.p === 2 ? '검토' : '선택'}</span><div class="rc"><b>${r.t}</b><p>${r.d}</p>${r.e ? `<em>${r.e}</em>` : ''}</div></div>`).join('')}</div>`
+function hBars(rows, unit = '명') {
+  const W = 470,
+    rowH = 30,
+    padL = 118,
+    padR = 58,
+    maxV = Math.max(...rows.map((r) => r.v)) * 1.06,
+    H = rows.length * rowH + 6
+  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px" role="img">`
+  rows.forEach((r, i) => {
+    const y = i * rowH + 6,
+      bw = (r.v / maxV) * (W - padL - padR)
+    s += `<text x="${padL - 9}" y="${y + 11}" text-anchor="end" font-size="11" fill="${r.hl ? '#132434' : '#6C7D8C'}" font-weight="${r.hl ? 600 : 400}">${r.n}</text><rect x="${padL}" y="${y + 1}" width="${Math.max(bw, 2)}" height="14" rx="2" fill="${r.hl ? '#12557E' : r.c || '#B9D0E0'}"/><text x="${padL + bw + 7}" y="${y + 12}" font-size="11" fill="${r.hl ? '#12557E' : '#3C4E5F'}" font-weight="${r.hl ? 700 : 500}">${fmt(r.v)}${unit}</text>${r.sub ? `<text x="${padL - 9}" y="${y + 22}" text-anchor="end" font-size="9.5" fill="#93A2AF">${r.sub}</text>` : ''}`
+  })
+  return `${s}</svg>`
+}
+function lineChart(labels, series, opt = {}) {
+  const W = 470,
+    H = opt.h || 150,
+    padL = 34,
+    padR = 12,
+    padT = 12,
+    padB = 24,
+    all = series.flatMap((s) => s.v),
+    mx = opt.max ?? Math.max(...all) * 1.1,
+    mn = opt.min ?? 0,
+    x = (i) => padL + (i * (W - padL - padR)) / (labels.length - 1),
+    y = (v) => padT + (1 - (v - mn) / (mx - mn)) * (H - padT - padB)
+  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px" role="img">`
+  ;[0, 0.5, 1].forEach((f) => {
+    const yy = padT + f * (H - padT - padB)
+    s += `<line x1="${padL}" y1="${yy}" x2="${W - padR}" y2="${yy}" stroke="#EAF0F4"/><text x="${padL - 6}" y="${yy + 3.5}" text-anchor="end" font-size="9.5" fill="#93A2AF">${fmt(mn + (1 - f) * (mx - mn))}</text>`
+  })
+  series.forEach((se) => {
+    const pts = se.v.map((v, i) => `${x(i)},${y(v)}`).join(' ')
+    if (se.area)
+      s += `<polygon points="${padL},${y(mn)} ${pts} ${W - padR},${y(mn)}" fill="${se.c}" opacity=".08"/>`
+    s += `<polyline points="${pts}" fill="none" stroke="${se.c}" stroke-width="${se.w || 2}" stroke-dasharray="${se.dash || ''}" stroke-linejoin="round"/>`
+    se.v.forEach((v, i) => {
+      s += `<circle cx="${x(i)}" cy="${y(v)}" r="${se.dash ? 0 : 3}" fill="#fff" stroke="${se.c}" stroke-width="1.6"/>`
+    })
+    if (se.last)
+      s += `<text x="${x(se.v.length - 1)}" y="${y(se.v[se.v.length - 1]) - 9}" text-anchor="end" font-size="10.5" font-weight="700" fill="${se.c}">${se.last}</text>`
+  })
+  labels.forEach((l, i) => {
+    s += `<text x="${x(i)}" y="${H - 7}" text-anchor="middle" font-size="9.5" fill="#6C7D8C">${l}</text>`
+  })
+  return `${s}</svg>`
+}
+function vBars(labels, vals, hl, opt = {}) {
+  const W = 470,
+    H = opt.h || 132,
+    padL = 8,
+    padB = 22,
+    padT = 16,
+    mx = Math.max(...vals) * 1.12,
+    bw = (W - padL * 2) / vals.length
+  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px" role="img">`
+  if (opt.ref) {
+    const yy = padT + (1 - opt.ref / mx) * (H - padT - padB)
+    s += `<line x1="${padL}" y1="${yy}" x2="${W - padL}" y2="${yy}" stroke="#A9BECD" stroke-dasharray="3 3"/><text x="${W - padL}" y="${yy - 4}" text-anchor="end" font-size="9.5" fill="#6C7D8C">${opt.refLabel || ''}</text>`
+  }
+  vals.forEach((v, i) => {
+    const h = (v / mx) * (H - padT - padB),
+      xx = padL + i * bw + bw * 0.16,
+      ww = bw * 0.68,
+      on = Array.isArray(hl) ? hl.includes(i) : i === hl
+    s += `<rect x="${xx}" y="${H - padB - h}" width="${ww}" height="${h}" rx="2" fill="${on ? '#12557E' : '#CBDCE8'}"/>${on ? `<text x="${xx + ww / 2}" y="${H - padB - h - 5}" text-anchor="middle" font-size="10" font-weight="700" fill="#12557E">${v}</text>` : ''}<text x="${xx + ww / 2}" y="${H - 7}" text-anchor="middle" font-size="9.5" fill="${on ? '#132434' : '#93A2AF'}" font-weight="${on ? 600 : 400}">${labels[i]}</text>`
+  })
+  return `${s}</svg>`
+}
+function gantt(rows, ps, pe, name) {
+  const W = 470,
+    rowH = 26,
+    H = (rows.length + 1) * rowH + 26,
+    all = [ps, pe, ...rows.flatMap((r) => [r.b1, r.b2])],
+    mn = dadd(new Date(Math.min(...all)), -2),
+    mx = dadd(new Date(Math.max(...all)), 2),
+    span = Math.max(1, Math.round((mx - mn) / 864e5)),
+    X = (d) => 110 + ((d - mn) / 864e5 / span) * (W - 120)
+  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px" role="img">`
+  for (let i = 0; i <= 4; i++) {
+    const d = dadd(mn, Math.round((span * i) / 4))
+    s += `<line x1="${X(d)}" y1="16" x2="${X(d)}" y2="${H - 16}" stroke="#EAF0F4"/><text x="${X(d)}" y="11" text-anchor="middle" font-size="9.5" fill="#93A2AF">${dfmt(d)}</text>`
+  }
+  const bar = (y, a, b, fill, text, tc, bold) => {
+    const x1 = X(a),
+      x2 = Math.max(X(b), x1 + 4)
+    return `<rect x="${x1}" y="${y}" width="${x2 - x1}" height="13" rx="2" fill="${fill}"/><text x="105" y="${y + 10}" text-anchor="end" font-size="10" fill="${tc}" font-weight="${bold ? 650 : 400}">${text.length > 13 ? `${text.slice(0, 12)}…` : text}</text>`
+  }
+  s += bar(22, ps, pe, '#12557E', name, '#132434', true)
+  rows.forEach((r, i) => {
+    s += bar(
+      22 + (i + 1) * rowH - 4,
+      r.b1,
+      r.b2,
+      r.lv === 'direct' ? '#C2634C' : r.lv === 'near' ? '#D8A33F' : '#B9C7D2',
+      r.n,
+      '#3C4E5F',
+      false,
+    )
+  })
+  return `${s}</svg>`
+}
+function groupBars(groups, colors) {
+  const W = 470,
+    H = 150,
+    padL = 36,
+    padB = 30,
+    padT = 14,
+    mx = Math.max(...groups.flatMap((g) => g.v)) * 1.15,
+    gw = (W - padL - 10) / groups.length
+  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px" role="img">`
+  ;[0, 0.5, 1].forEach((f) => {
+    const yy = padT + f * (H - padT - padB)
+    s += `<line x1="${padL}" y1="${yy}" x2="${W - 10}" y2="${yy}" stroke="#EAF0F4"/><text x="${padL - 6}" y="${yy + 3.5}" text-anchor="end" font-size="9.5" fill="#93A2AF">${fmt((1 - f) * mx)}</text>`
+  })
+  groups.forEach((g, gi) => {
+    const bw = (gw * 0.74) / g.v.length
+    g.v.forEach((v, i) => {
+      const h = (v / mx) * (H - padT - padB),
+        x = padL + gi * gw + gw * 0.13 + i * bw
+      s += `<rect x="${x}" y="${H - padB - h}" width="${bw * 0.82}" height="${h}" rx="2" fill="${colors[i]}"/><text x="${x + bw * 0.41}" y="${H - padB - h - 4}" text-anchor="middle" font-size="9.5" fill="#3C4E5F">${fmt(v)}</text>`
+    })
+    s += `<text x="${padL + gi * gw + gw * 0.5}" y="${H - 12}" text-anchor="middle" font-size="10.5" fill="#132434" font-weight="600">${g.n}</text>`
+  })
+  return `${s}</svg>`
+}
+
+export function getDetailHtml(item, A) {
+  const v = A.v,
+    p = A.p,
+    R = A.R,
+    T = A.T,
+    m = A.m
+  if (item.key === 'visitor') {
+    const rows = v.sims.map((s) => ({
+      n: s.n.length > 12 ? `${s.n.slice(0, 11)}…` : s.n,
+      v: s.series[4],
+      sub: `${s.reg} · ${s.days}일`,
+    }))
+    rows.push({
+      n: '이번 기획안 목표',
+      v: p.target,
+      hl: true,
+      sub: `${R.name} · ${A.days}일`,
+    })
+    return (
+      sec(
+        1,
+        '핵심 지표',
+        `<div class="metricrow c2">${mt('목표 방문객', `${fmt(p.target)}<small>명</small>`, `${A.days}일 · 일평균 ${fmt(A.daily)}명`, true)}${mt('유사 축제 중위값', `${fmt(v.median)}<small>명</small>`, '최근 개최분 5건 기준')}${mt('중위값 대비 배수', `${round1(v.ratio)}<small>배</small>`, v.v1)}${mt('타당성 점수', `${v.s1}<small>/100</small>`, '흥행 스코어 반영')}</div>`,
+      ) +
+      sec(
+        2,
+        '판단 근거 및 데이터',
+        `<div class="vizbox">${hBars(rows)}<p class="vizcap">유사 축제는 주제(${T.name})·개최 지역 특성·규모·개최 시기를 종합해 선정했습니다. 동일 지역 개최 이력 1건을 포함합니다.</p></div><div class="vizbox" style="margin-top:10px">${lineChart(
+          YEARS,
+          [
+            { v: v.yearAvg, c: '#12557E', area: true, last: fmt(v.yearAvg[4]) },
+            {
+              v: YEARS.map(() => p.target),
+              c: '#C2634C',
+              dash: '4 3',
+              w: 1.6,
+              last: `목표 ${fmt(p.target)}`,
+            },
+          ],
+        )}<p class="vizcap">유사 축제 5건의 연도별 평균 방문객(진한 선)과 이번 목표(점선). 최근 4년 연평균 증가율 ${(v.simCagr * 100).toFixed(1)}%.</p><div class="legend"><span><i style="background:#12557E"></i>유사 축제 평균</span><span><i style="background:#C2634C"></i>이번 기획안 목표</span></div></div><table class="dt" style="margin-top:12px"><tr><th>유사 축제</th><th>지역</th><th class="n">2026년 실적</th><th class="n">4년 증감</th></tr>${v.sims.map((s) => `<tr><td>${s.n}</td><td style="color:var(--muted)">${s.reg}</td><td class="n">${fmt(s.series[4])}</td><td class="n" style="color:${s.series[4] >= s.series[0] ? 'var(--good)' : 'var(--risk)'}">${s.series[4] >= s.series[0] ? '+' : ''}${Math.round((s.series[4] / s.series[0] - 1) * 100)}%</td></tr>`).join('')}</table>`,
+      ) +
+      sec(
+        3,
+        '결과 해석',
+        `<div class="readbox read"><p>목표 ${fmt(p.target)}명은 유사 축제 중위값 ${fmt(v.median)}명의 <strong>${round1(v.ratio)}배</strong>, 최고 실적 ${fmt(v.top)}명과 비교하면 ${round1(p.target / v.top)}배입니다. ${v.ratio > 1.3 ? '같은 주제·규모대에서 실제로 관측된 적 없는 수준이므로, 이 수치를 전제로 한 예산·인력·안전 계획은 근거가 약합니다.' : v.ratio < 0.8 ? '실제 관측 범위의 하단이라 달성 가능성은 높지만, 사업 규모를 설명할 때 근거가 약해질 수 있습니다.' : '실제 관측 범위 안에 있어 예산·운영 계획의 근거로 사용할 수 있습니다.'}</p><p>유사 축제군은 최근 4년간 연평균 ${(v.simCagr * 100).toFixed(1)}% ${v.simCagr > 0 ? '성장' : '감소'}했습니다. ${p.eventType === 'new' ? '다만 이번 기획안은 신규 개최로, 기존 축제의 반복 방문 기반이 없다는 점을 감안해야 합니다.' : '기존 개최 축제는 반복 방문 기반이 형성되어 있습니다.'}</p></div>`,
+      ) +
+      sec(
+        4,
+        '권장 수정사항',
+        recs([
+          {
+            p: v.ratio > 1.3 ? 1 : 3,
+            t: `1차 목표를 ${fmt(v.rec1.first)}명 수준으로 조정`,
+            d: `유사 축제 중위값 ${fmt(v.median)}명에 성장률을 반영한 값입니다. 예산·안전·인력 계획의 기준선을 이 값으로 잡으면 근거를 설명할 수 있습니다.`,
+            e: `현재 목표 대비 ${fmt(p.target - v.rec1.first)}명 차이`,
+          },
+          {
+            p: 2,
+            t: `확장 목표 ${fmt(v.rec1.stretch)}명은 조건부로 분리 표기`,
+            d: '셔틀 확보·숙박 연계·광역 홍보 등 선행 조건이 충족될 때만 도달 가능한 값으로 별도 관리하고, 기본 계획은 1차 목표로 수립합니다.',
+          },
+          {
+            p: 3,
+            t: '집계 기준을 기획안에 명시',
+            d: '유사 축제 실적은 대부분 유동인구 추정 기반입니다. 이번 축제의 집계 방식(통신사 유동인구 / 입장 게이트 / 주차 대수 환산)을 미리 정해야 개최 후 비교가 가능합니다.',
+          },
+        ]),
+      ) +
+      `<p class="note">이 항목은 목표값의 타당성만 검토합니다. 수요 예측값을 산출하거나 예산 규모를 산정하지 않습니다.</p>`
+    )
+  }
+  if (item.key === 'trend') {
+    const rise = T.detail.filter((d) => d.v[4] - d.v[0] > 12),
+      fall = T.detail.filter((d) => d.v[4] - d.v[0] < -12)
+    return (
+      sec(
+        1,
+        '핵심 지표',
+        `<div class="metricrow c3">${mt('2026 관심도 지수', T.series[4], `2022년 대비 ${T.series[4] >= T.series[0] ? '+' : ''}${Math.round((T.series[4] / T.series[0] - 1) * 100)}%`, true)}${mt('연평균 증감률', `${v.tCagr > 0 ? '+' : ''}${(v.tCagr * 100).toFixed(1)}<small>%</small>`, '최근 4년')}${mt('추이 판단', v.v2, `${v.s2}점 / 100`)}</div>`,
+      ) +
+      sec(
+        2,
+        '판단 근거 및 데이터',
+        `<div class="vizbox">${lineChart(YEARS, [{ v: T.series, c: v.v2 === '하락' ? '#C2634C' : '#12557E', area: true, last: T.series[4] }], { max: 110 })}<p class="vizcap">주제 키워드군(${T.kw})의 통합 검색 관심도. 최댓값 100 기준 상대 지수입니다.</p></div><table class="dt" style="margin-top:12px"><tr><th>세부 키워드</th><th class="n">2022</th><th class="n">2026</th><th>추이</th></tr>${T.detail.map((d) => `<tr><td>${d.k}</td><td class="n" style="color:var(--muted)">${d.v[0]}</td><td class="n"><b>${d.v[4]}</b></td><td><span class="tagsm ${d.v[4] - d.v[0] > 12 ? 'g' : d.v[4] - d.v[0] < -12 ? 'r' : 'n'}">${d.d}</span></td></tr>`).join('')}</table><p class="vizcap" style="margin-top:9px">프로그램 구성에 포함된 요소별로 관심 흐름이 다릅니다. 같은 주제 안에서도 상승 키워드와 하락 키워드를 구분해 배치 비중을 정하는 근거로 사용합니다.</p>`,
+      ) +
+      sec(
+        3,
+        '결과 해석',
+        `<div class="readbox read"><p>${T.name} 주제는 최근 4년간 연평균 ${(v.tCagr * 100).toFixed(1)}% ${v.tCagr > 0 ? '상승' : '하락'}해 <strong>${v.v2}</strong> 흐름으로 판단했습니다.</p><p>${rise.length ? `세부 키워드 중 ${rise.map((d) => d.k).join(', ')}이(가) 상승 폭이 큽니다. ` : ''}${fall.length ? `반대로 ${fall.map((d) => d.k).join(', ')}은(는) 하락 구간에 들어섰습니다. ` : ''}${rise.some((d) => d.d.includes('확산')) ? '다만 급상승 키워드는 전국 도입이 빠르게 늘어 차별화 효과가 줄어드는 구간입니다.' : !rise.length && !fall.length ? '세부 키워드 간 편차는 크지 않습니다.' : ''}</p></div>`,
+      ) +
+      sec(
+        4,
+        '기획 제안',
+        recs([
+          ...rise.slice(0, 1).map((d) => ({
+            p: 2,
+            t: `${d.k}을(를) 대표 프로그램으로 전면 배치`,
+            d: `4년간 ${Math.round((d.v[4] / d.v[0] - 1) * 100)}% 상승한 키워드입니다. 홍보 문구와 대표 이미지의 기준을 이 요소로 맞추면 검색 유입과 기획 내용이 일치합니다.`,
+          })),
+          ...T.detail
+            .filter((d) => d.d.includes('확산'))
+            .map((d) => ({
+              p: 2,
+              t: `${d.k}은(는) 차별화 요소가 아닌 기본 연출로 취급`,
+              d: '전국 도입이 빠르게 늘어 단독 홍보 포인트로는 변별력이 낮습니다. 예산 비중을 줄이고 대표 프로그램의 보조 연출로 배치하는 편이 효율적입니다.',
+            })),
+          ...fall.slice(0, 1).map((d) => ({
+            p: d.v[4] < 60 ? 1 : 3,
+            t: `${d.k} 비중 축소 검토`,
+            d: `관심도가 ${Math.round((1 - d.v[4] / d.v[0]) * 100)}% 감소했습니다. 유지하려면 체험형·야간형으로 형식을 바꾸는 전제가 필요합니다.`,
+          })),
+          {
+            p: 3,
+            t: '개최 월의 계절 요인은 별도 항목에서 확인',
+            d: '이 항목은 주제 관심도의 시간 흐름만 봅니다. 개최 시기가 적절한지는 지역·시기 관광수요 적합성에서 판단합니다.',
+          },
+        ]),
+      ) +
+      `<p class="note">트렌드 핏은 개최 월의 계절성 자체를 평가 기준에 포함하지 않습니다.</p>`
+    )
+  }
+  if (item.key === 'demand') {
+    const ac = R.access
+    return (
+      sec(
+        1,
+        '핵심 지표',
+        `<div class="metricrow c2">${mt('적합성 점수', `${v.s3}<small>/100</small>`, '평상시 25% · 월별 50% · 접근성 25%', true)}${mt(`${m + 1}월 관광수요 지수`, v.mIdx, `연중 ${v.mRank}위 (연평균 100)`)}${mt('평상시 지역 관광수요', `${R.baseDemand}<small>/100</small>`, `${R.annual} · ${R.baseNote}`)}${mt('행사장 접근성', `${v.accScore}<small>/100</small>`, `대중교통 ${ac.transitScore} · ${ac.transitNote}`)}</div>`,
+      ) +
+      sec(
+        2,
+        '판단 근거 및 데이터',
+        `<div class="vizbox">${vBars(MONTHS, R.monthly, m, { ref: 100, refLabel: '연평균 100' })}<p class="vizcap">${R.name}의 최근 5년 월별 관광수요 지수(연평균 100 기준). 개최 월 ${m + 1}월은 ${v.mIdx}로 연중 ${v.mRank}위입니다.</p></div><div class="vizbox" style="margin-top:10px"><div class="metricrow c2" style="gap:8px">${mt('서울 도심 기준 이동', ac.car, `약 ${ac.km}km`)}${mt('철도', ac.train, ac.station)}${mt('권장 주차면수', `${fmt(v.parkNeed)}<small>면</small>`, '목표 방문객 기반 산출')}${mt('대중교통 접근성', `${ac.transitScore}<small>/100</small>`, ac.transitNote)}</div><p class="vizcap">권장 주차면수는 일평균 ${fmt(A.daily)}명 · 자가용 분담 60% · 동승 2.8명 · 회전율 3.5회를 적용한 값입니다.</p></div><div class="metricrow c2" style="margin-top:10px">${mt('외지인 방문 비율', `${R.outRatio}<small>%</small>`, '지역 내 소비 유발 기반')}${mt('체류형 방문 비율', `${R.stayRatio}<small>%</small>`, '숙박을 동반한 방문')}</div>`,
+      ) +
+      sec(
+        3,
+        '결과 해석',
+        `<div class="readbox read"><p>${R.name}의 평상시 관광수요는 ${R.baseDemand}점으로 ${R.baseNote}입니다. 반면 개최 월인 ${m + 1}월은 지수 ${v.mIdx}로 연중 ${v.mRank}위여서, <strong>시기 선택 자체는 ${v.mIdx >= 115 ? '유리' : '무난'}합니다</strong>.</p><p>${v.accScore < 60 ? `전체 점수를 낮추는 요인은 접근성입니다. 대중교통 ${ac.transitScore}점으로, ${ac.transitNote}. 목표 방문객이 몰리는 피크 시간대에 진입 동선이 병목이 될 수 있습니다.` : `접근성도 ${v.accScore}점으로 무리가 없어, 지역·시기 조합에서 큰 제약은 확인되지 않습니다.`}</p></div>`,
+      ) +
+      sec(
+        4,
+        '권장 수정사항',
+        recs([
+          ...(ac.transitScore < 65
+            ? [
+                {
+                  p: 2,
+                  t: `${ac.station.split('·')[0].trim()}·터미널 ↔ 행사장 순환 셔틀 운행`,
+                  d: '정기 노선이 부족해 대중교통 이용자가 마지막 구간에서 이탈할 수 있습니다. 운행 시간은 야간 프로그램 종료 후 1시간까지 확보해야 체류 시간이 유지됩니다.',
+                },
+              ]
+            : []),
+          {
+            p: 3,
+            t: '수도권 왕복 교통 상품 연계',
+            d: `외지인 비율이 ${R.outRatio}%로 높아, 왕복 전세버스·철도 연계 상품을 사전 판매하면 방문 확정 인원을 미리 파악할 수 있습니다.`,
+          },
+        ]),
+      ) +
+      `<p class="note">이 항목은 평상시 지역 관광수요와 월별 추이, 접근성만 평가합니다. 특정 개최일에 주변 행사가 겹치는지는 일정 중복·혼잡 리스크에서 별도로 진단합니다.</p>`
+    )
+  }
+  if (item.key === 'overlap') {
+    const sd = dparse(p.start),
+      ed = dparse(p.end),
+      lvName = { direct: '기간 중복', near: '인접(±3일)', watch: '주의(±7일)' },
+      overlapRecs = []
+    if (v.best && v.best.w < v.nDirect * 3 + v.nNear)
+      overlapRecs.push({
+        p: v.nDirect >= 2 ? 1 : 2,
+        t: `개최일 ${v.best.off > 0 ? `${v.best.off}일 순연` : `${Math.abs(v.best.off)}일 앞당김`} 검토 (${dfmt(dadd(sd, v.best.off))}~${dfmt(dadd(ed, v.best.off))})`,
+        d: `이 구간에서는 기간 직접 중복이 ${v.best.c.filter((x) => x.lv === 'direct').length}건으로 줄어듭니다. 일정 확정 전이라면 가장 비용이 적게 드는 대응입니다.`,
+        e: `이력 기준 비교이며, 상대 행사가 일정을 변경할 가능성은 반영되지 않았습니다.${dadd(sd, v.best.off).getMonth() !== sd.getMonth() ? ' 개최 월이 바뀌므로 관광수요·기상 항목을 다시 분석해야 합니다.' : ''}`,
+      })
+    if (v.nDirect)
+      overlapRecs.push({
+        p: 1,
+        t: '중복 행사와 셔틀·숙박 공동 운영 협의',
+        d: `${v.cf
+          .filter((c) => c.lv === 'direct')
+          .map((c) => c.n)
+          .join(
+            ', ',
+          )}와 권역 순환 셔틀을 공동 운영하면 경합을 연계로 바꿀 수 있습니다. 숙박은 개최 4개월 전 블록 예약으로 객실을 선점해야 합니다.`,
+      })
+    if (v.nDirect || v.nNear)
+      overlapRecs.push({
+        p: 2,
+        t: '요일 배치 조정으로 피크 분산',
+        d: '중복 행사와 주말 피크가 겹치면 혼잡이 집중됩니다. 대표 프로그램을 금요일 야간·일요일 오전으로 분산 배치하면 동시 체류 인원을 낮출 수 있습니다.',
+      })
+    overlapRecs.push({
+      p: 3,
+      t: '차별화 지점을 홍보 문구에 명시',
+      d: `인접 행사와 방문 목적이 겹치지 않도록, 이번 축제만의 프로그램(${
+        A.progs
+          .slice(0, 2)
+          .map((x) => x.n)
+          .join(', ') || '대표 프로그램'
+      })을 전면에 배치합니다.`,
+    })
+    return (
+      sec(
+        1,
+        '핵심 지표',
+        `<div class="metricrow c3">${mt('위험 수준', v.v4, '스코어 미반영 진단', true)}${mt('기간 직접 중복', `${v.nDirect}<small>건</small>`, '반경 60km 이내')}${mt('인접 시기 행사', `${v.nNear}<small>건</small>`, '±3일 이내')}</div><div class="metricrow c2" style="margin-top:9px">${mt('숙박 경합 압력', `${v.stayPressure}<small>%</small>`, `중복 행사 숙박 수요 추정 ${fmt(v.rivalStayDemand)}명 / 권역 수용 ${fmt(v.stayRooms * 2.2)}명`)}${mt('검토 범위', `${dfmt(sd)}~${dfmt(ed)}`, '최근 5년 중 3회 이상 개최된 행사만 집계')}</div>`,
+      ) +
+      sec(
+        2,
+        '판단 근거 및 데이터',
+        v.cf.length
+          ? `<div class="vizbox">${gantt(v.cf, sd, ed, p.name || '이번 축제')}<p class="vizcap">진한 막대가 이번 기획안의 개최 기간입니다. 빨간색은 기간이 겹치는 행사, 주황색은 전후 3일 내 인접 행사입니다.</p><div class="legend"><span><i style="background:#12557E"></i>이번 축제</span><span><i style="background:#C2634C"></i>기간 중복</span><span><i style="background:#D8A33F"></i>인접</span><span><i style="background:#B9C7D2"></i>주의 범위</span></div></div><table class="dt" style="margin-top:12px"><tr><th>행사명</th><th>권역</th><th class="n">거리</th><th class="n">규모</th><th>구분</th></tr>${v.cf.map((c) => `<tr class="${c.lv === 'direct' ? 'hit2' : c.lv === 'near' ? 'hit' : ''}"><td><b>${c.n}</b><div style="color:var(--muted);font-size:11px">${dfmt(c.b1)}~${dfmt(c.b2)} · 최근 5년 ${c.held}회</div></td><td style="color:var(--muted)">${c.reg}</td><td class="n">${c.km}km</td><td class="n">${fmt(c.scale)}명</td><td><span class="tagsm ${c.lv === 'direct' ? 'r' : c.lv === 'near' ? 'w' : 'n'}">${lvName[c.lv]}</span></td></tr>`).join('')}</table>`
+          : `<div class="vizbox"><p class="read" style="font-size:12.5px">반경 80km · ±7일 범위에서 최근 5년 중 3회 이상 반복 개최된 행사가 확인되지 않았습니다.</p></div>`,
+      ) +
+      sec(
+        3,
+        '결과 해석',
+        `<div class="readbox read"><p>${v.nDirect ? `개최 기간에 직접 겹치는 행사가 <strong>${v.nDirect}건</strong> 있습니다. 가장 가까운 사례는 ${v.cf[0].n}(${v.cf[0].km}km, 최근 5년 ${v.cf[0].held}회 개최, 규모 ${fmt(v.cf[0].scale)}명)입니다. 같은 권역 방문객이 두 행사로 나뉘고, 숙박·주차·셔틀 인력이 동시에 경합합니다.` : v.nNear ? `기간이 직접 겹치는 행사는 없습니다. 다만 전후 3일 내 ${v.nNear}건이 있어 숙박 예약과 홍보 노출이 분산될 수 있습니다.` : '같은 시기 인접 권역의 반복 개최 행사가 확인되지 않아, 일정 측면의 경합 요인은 낮습니다.'}</p><p>${v.best && v.best.w < v.nDirect * 3 + v.nNear ? `개최일을 ${v.best.off > 0 ? '+' : ''}${v.best.off}일 이동하면 중복 가중치 ${v.nDirect * 3 + v.nNear}에서 ${v.best.w}로 낮아집니다(${dfmt(dadd(sd, v.best.off))}~${dfmt(dadd(ed, v.best.off))}).` : '검토 범위(±14일) 안에서 현재 일정보다 유리한 대체 구간은 확인되지 않았습니다.'}</p></div>`,
+      ) +
+      sec(4, '권장 수정사항', recs(overlapRecs)) +
+      `<p class="note">이 진단은 행사 이력만으로 판단하며 일반 관광객 수를 기준에 포함하지 않습니다. 흥행 스코어에는 반영되지 않습니다.</p>`
+    )
+  }
+  if (item.key === 'weather') {
+    const W = R.weather
+    return (
+      sec(
+        1,
+        '핵심 지표',
+        `<div class="metricrow c2">${mt('행사 기상 취약도', `${v.wRisk}<small>/100</small>`, '선택 프로그램과 과거 동일 시기 강수 통계 기반', true)}${mt(`${m + 1}월 강수 발생률`, `${v.rainP}<small>%</small>`, `최근 10년 중 ${W.rainYears[m]}년 · 일 10mm 이상 ${W.heavyYears[m]}년`)}</div>`,
+      ) +
+      sec(
+        2,
+        '판단 근거 및 데이터',
+        `<div class="vizbox">${vBars(
+          MONTHS,
+          W.rainYears.map((x) => x * 10),
+          m,
+          { h: 130 },
+        )}<p class="vizcap">${R.name} 월별 강수 발생률(최근 10년 중 강수 관측 연수 × 10%). ${W.note}.</p></div><table class="dt" style="margin-top:10px"><tr><th>취약 요소</th><th>발생 이력</th></tr>${v.wFlags.map((f) => `<tr><td><b>${f.t}</b> <span class="tagsm ${f.risk ? 'r' : 'n'}">${f.risk ? '취약' : '해당 없음'}</span><div style="color:var(--muted);font-size:11px;margin-top:2px">${f.p}</div></td><td style="font-size:11.5px">${f.d}</td></tr>`).join('')}</table></div>`,
+      ) +
+      sec(
+        3,
+        '결과 해석',
+        `<div class="readbox read"><p>${m + 1}월 동일 시기에 강수가 관측된 해는 최근 10년 중 ${W.rainYears[m]}년(${v.rainP}%)입니다. 선택한 프로그램 구성과 기상 이력을 결합한 행사 기상 취약도는 <strong>${v.wRisk}점(${v.v5})</strong>입니다.</p><p>${
+          v.wFlags.filter((f) => f.risk).length
+            ? `특히 ${v.wFlags
+                .filter((f) => f.risk)
+                .map((f) => f.t)
+                .join(
+                  ' · ',
+                )} 요소가 현재 프로그램 구성과 직접 맞물립니다. ${v.wFlags.filter((f) => f.risk)[0].p} 계획이 기상 조건에 따라 취소 또는 축소될 수 있습니다.`
+            : '현재 프로그램 구성에서 기상 조건과 직접 충돌하는 요소는 크지 않습니다.'
+        }</p></div>`,
+      ) +
+      sec(
+        4,
+        '권장 수정사항',
+        recs([
+          ...v.wFlags
+            .filter((f) => f.risk)
+            .map((f) => ({
+              p: f.t === '강수' ? 1 : 2,
+              t:
+                f.t === '강수'
+                  ? '우천 판단 시점과 환불·연기 기준 공지'
+                  : f.t === '강풍'
+                    ? '풍속 기준과 대체 공연 절차를 사전 확정'
+                    : f.t === '안개 · 시정'
+                      ? '시정 불량 시 대체 콘텐츠 준비'
+                      : '야간 방한 대응 배치',
+              d:
+                f.t === '강수'
+                  ? '유료 프로그램이 있다면 우천 시 연기·환불 기준을 사전 공지해야 민원이 줄어듭니다. 판단 시점은 행사 시작 3시간 전으로 고정하는 방식이 흔합니다.'
+                  : `${f.d}. ${f.p}에 대한 대체 운영 절차를 운영 매뉴얼에 미리 넣어 두면 현장 혼선이 줄어듭니다.`,
+            })),
+        ]),
+      ) +
+      `<p class="note">이 진단은 미래 날씨를 예측하지 않습니다. 과거 동일 시기 기상 통계와 기획안의 구조적 취약성만 봅니다. 흥행 스코어에는 반영되지 않습니다.</p>`
+    )
+  }
+  const P = R.poi,
+    byType = (t) => R.poiList.filter((x) => x.t === t)
+  return (
+    sec(
+      1,
+      '핵심 지표',
+      `<div class="metricrow c3">${mt('연계 잠재력', `${v.s6}<small>/100</small>`, v.v6, true)}${mt('반경 15km 관광지', `${P.r15.tour}<small>곳</small>`, `반경 5km ${P.r5.tour}곳`)}${mt('체류 수용률', `${Math.round(v.stayCov)}<small>%</small>`, `객실 ${fmt(P.r15.rooms)}실 기준`)}</div>`,
+    ) +
+    sec(
+      2,
+      '판단 근거 및 데이터',
+      `<div class="vizbox">${groupBars(
+        [
+          { n: '관광지', v: [P.r5.tour, P.r15.tour] },
+          { n: '음식점 · 상권', v: [P.r5.food, P.r15.food] },
+          { n: '숙박', v: [P.r5.stay, P.r15.stay] },
+        ],
+        ['#12557E', '#A9C9DD'],
+      )}<div class="legend"><span><i style="background:#12557E"></i>반경 5km</span><span><i style="background:#A9C9DD"></i>반경 15km</span></div><p class="vizcap">행사장(${p.venue || '미입력'}) 기준 POI 집계입니다.</p></div><table class="dt" style="margin-top:12px"><tr><th>주요 연계 자원</th><th>구분</th><th class="n">거리</th></tr>${R.poiList.map((x) => `<tr><td><b>${x.n}</b><div style="color:var(--muted);font-size:11px">${x.note}</div></td><td><span class="tagsm n">${x.t}</span></td><td class="n">${x.km}km</td></tr>`).join('')}</table><div class="metricrow c3" style="margin-top:11px">${mt('숙박 수용 인원', `${fmt(v.stayCap)}<small>명</small>`, '객실당 2.2명 적용')}${mt('일평균 방문객', `${fmt(A.daily)}<small>명</small>`, `${A.days}일 기준`)}${mt('상권 규모', `${fmt(P.r15.food)}<small>개</small>`, '음식점 · 판매 시설')}</div>`,
+    ) +
+    sec(
+      3,
+      '결과 해석',
+      `<div class="readbox read"><p>반경 15km 안에 관광지 ${P.r15.tour}곳, 음식점·상권 ${fmt(P.r15.food)}개, 숙박 ${P.r15.stay}곳(객실 ${fmt(P.r15.rooms)}실)이 있습니다. ${byType('관광지')[0] ? `특히 ${byType('관광지')[0].n}(${byType('관광지')[0].km}km)은 ${byType('관광지')[0].note}으로, 축제 주제와 직접 연결할 수 있는 자원입니다.` : ''}</p><p>반면 숙박 수용 인원 ${fmt(v.stayCap)}명은 일평균 방문객 ${fmt(A.daily)}명의 <strong>${Math.round(v.stayCov)}%</strong> 수준입니다. ${v.stayCov < 40 ? '체류형 방문을 늘리려면 객실 외 숙박 자원을 추가로 확보해야 합니다. 현재 구조에서는 당일 방문 중심으로 운영될 가능성이 큽니다.' : '체류형 방문을 흡수할 여력이 있는 편입니다.'}</p></div>`,
+    ) +
+    sec(
+      4,
+      '기획 제안',
+      recs([
+        {
+          p: 2,
+          t: `관광 확장 — ${byType('관광지')[0]?.n || '인근 관광지'} 연계 통합권`,
+          d: `축제 입장 또는 프로그램 예약자에게 ${byType('관광지')
+            .slice(0, 2)
+            .map((x) => x.n)
+            .join(
+              ' · ',
+            )} 할인 통합권을 제공합니다. 방문 동선이 행사장 밖으로 확장되면서 지역 체류 시간이 늘어납니다.`,
+          e: `대상 자원: 반경 15km 관광지 ${P.r15.tour}곳`,
+        },
+        {
+          p: 2,
+          t: `상권 연계 — ${byType('상권')[0]?.n || '인근 상권'} 야간 영업 연장`,
+          d: `행사 기간 중 ${byType('상권')[0]?.n || '인근 상권'} 점포의 영업 시간을 프로그램 종료 시각에 맞춰 연장하고, 축제 팔찌 제시 시 할인·환급을 적용합니다. 소비가 행사장 부스가 아닌 기존 상권으로 흐르게 하는 방식입니다.`,
+          e: `대상 규모: 음식점 · 판매 시설 ${fmt(P.r15.food)}개`,
+        },
+        {
+          p: v.stayCov < 40 ? 1 : 3,
+          t: '체류 연장 — 1박 2일 코스 상품과 임시 숙박 자원 확보',
+          d: `현재 객실 수용률이 ${Math.round(v.stayCov)}%이므로, 정규 숙박만으로는 체류형 수요를 받기 어렵습니다. 캠핑·농가민박·유휴 시설을 한시 등록해 보완하고, 야간 프로그램 + 다음 날 오전 관광지를 묶은 1박 2일 코스를 사전 판매합니다.`,
+          e: `부족 추정: 약 ${fmt(Math.max(0, Math.round((A.daily * 0.4 - v.stayCap) / 2.2)))}실`,
+        },
+      ]),
+    ) +
+    `<p class="note">관광 연계 잠재력은 흥행 스코어에 반영되지 않는 별도 진단입니다. POI 수와 분포를 근거로 관광 확장 · 상권 연계 · 체류 연장의 세 관점에서 제안합니다.</p>`
+  )
+}
+
+export function Panel({ item, A, onClose, onEdit, onMove }) {
+  if (!item) return null
+  const d = cardData(item, A)
+  return (
+    <>
+      <div className="scrim on" onClick={onClose} />
+      <aside
+        className="panel on"
+        aria-hidden="false"
+        aria-label={`${item.no}. ${item.name} 상세 분석`}
+      >
+        <div className="p-head">
+          <div className="p-nav">
+            <button
+              className="iconbtn"
+              onClick={() => onMove(-1)}
+              disabled={item.index === 0}
+              title="이전 항목"
+            >
+              ‹
+            </button>
+            <button
+              className="iconbtn"
+              onClick={() => onMove(1)}
+              disabled={item.index === ITEMS.length - 1}
+              title="다음 항목"
+            >
+              ›
+            </button>
+            <span className="idx">
+              {item.index + 1} / {ITEMS.length} 항목
+            </span>
+            <div className="spacer" />
+            <button className="iconbtn" onClick={onClose} title="닫기 (Esc)">
+              ×
+            </button>
+          </div>
+          <div className="p-title">
+            <div>
+              <h2>
+                {item.no}. {item.name}
+              </h2>
+              <p className="p-scope">
+                {item.scored ? '흥행 스코어 반영' : '별도 진단'} · {item.scope}
+              </p>
+            </div>
+            <span className={levelClass(d.tone)}>{d.pill}</span>
+          </div>
+        </div>
+        <div
+          className="p-body"
+          dangerouslySetInnerHTML={{ __html: getDetailHtml(item, A) }}
+        />
+        <div className="p-foot">
+          <Button small primary onClick={onEdit}>
+            이 항목 보완하러 가기
+          </Button>
+          <span className="spacer" />
+          <Button small onClick={onClose}>
+            닫기
+          </Button>
+        </div>
+      </aside>
+    </>
+  )
+}
