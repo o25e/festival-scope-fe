@@ -57,6 +57,7 @@ const loadNaverMaps = () => {
 
     const cleanup = () => {
       window.clearTimeout(timeoutId)
+      script.removeEventListener('error', onScriptError)
       if (window[NAVER_MAP_CALLBACK_NAME] === onReady) {
         delete window[NAVER_MAP_CALLBACK_NAME]
       }
@@ -243,13 +244,13 @@ function NaverMap({ name, latitude, longitude }) {
           zoomControl: false,
           mapDataControl: false,
         })
+        mapRef.current = map
         const marker = new naverMaps.Marker({
           map,
           position,
           title: name,
         })
 
-        mapRef.current = map
         markerRef.current = marker
       } catch (error) {
         if (disposed) return
