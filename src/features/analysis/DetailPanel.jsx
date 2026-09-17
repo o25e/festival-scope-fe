@@ -9,6 +9,47 @@ const sec = (n, title, html) =>
   `<div class="sect"><div class="sect-h"><b>${n}</b><h4>${title}</h4><span class="line"></span></div>${html}</div>`
 const recs = (list) =>
   `<div class="recs">${list.map((r) => `<div class="rec"><span class="pri p${r.p}">${r.p === 1 ? '즉시' : r.p === 2 ? '검토' : '선택'}</span><div class="rc"><b>${r.t}</b><p>${r.d}</p>${r.e ? `<em>${r.e}</em>` : ''}</div></div>`).join('')}</div>`
+const weeklyVisitorData = [
+  { label: '10월 1주', range: '10.01 - 10.07', value: 7.8 },
+  { label: '10월 2주', range: '10.08 - 10.14', value: 9.2 },
+  { label: '10월 3주', range: '10.15 - 10.21', value: 12.6, highlight: true },
+  { label: '10월 4주', range: '10.22 - 10.31', value: 10.4 },
+]
+const weeklyVisitorPeak = weeklyVisitorData.reduce((peak, row) =>
+  row.value > peak.value ? row : peak,
+)
+
+function weeklyBars(rows) {
+  const W = 520,
+    H = 205,
+    padL = 35,
+    padR = 8,
+    padT = 27,
+    padB = 40,
+    maxV = 15,
+    plotH = H - padT - padB,
+    plotW = W - padL - padR,
+    groupW = plotW / rows.length
+  let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="직전년도 개최월 주차별 방문객 수 막대그래프">`
+  ;[0, 5, 10, 15].forEach((tick) => {
+    const y = H - padB - (tick / maxV) * plotH
+    s += `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="#EAF0F4"/><text x="${padL - 7}" y="${y + 3.5}" text-anchor="end" font-size="10" fill="#93A2AF">${tick}</text>`
+  })
+  rows.forEach((row, i) => {
+    const barW = groupW * 0.56,
+      x = padL + i * groupW + (groupW - barW) / 2,
+      barH = (row.value / maxV) * plotH,
+      y = H - padB - barH,
+      fill = row.highlight ? '#5577B5' : '#91B4E1'
+    s += `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="4" fill="${fill}"/><text x="${x + barW / 2}" y="${y - 8}" text-anchor="middle" font-size="11.5" font-weight="700" fill="#132434">${row.value}만 명</text><text x="${x + barW / 2}" y="${H - padB + 18}" text-anchor="middle" font-size="10.5" fill="#3C4E5F" font-weight="600">${row.label}</text><text x="${x + barW / 2}" y="${H - padB + 34}" text-anchor="middle" font-size="9.5" fill="#6C7D8C">(${row.range})</text>`
+  })
+  return `${s}</svg>`
+}
+
+const accessIcon = (type) =>
+  type === 'transit'
+    ? `<span class="access-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 16.5V6.8C6 5.25 7.25 4 8.8 4h6.4C16.75 4 18 5.25 18 6.8v9.7M6 11h12M8.5 16.5v2M15.5 16.5v2M8 19h8M8.4 7h.1M15.5 7h.1"/></svg></span>`
+    : `<span class="access-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 17V7h4.3a3 3 0 0 1 0 6H9M9 10h4"/></svg></span>`
 function hBars(rows, unit = '명') {
   const W = 470,
     rowH = 30,
@@ -269,7 +310,7 @@ export function getDetailHtml(item, A) {
       sec(
         2,
         '판단 근거 및 데이터',
-        `<div class="vizbox">${vBars(MONTHS, R.monthly, m, { ref: 100, refLabel: '연평균 100' })}<p class="vizcap">${R.name}의 최근 5년 월별 관광수요 지수(연평균 100 기준). 개최 월 ${m + 1}월은 ${v.mIdx}로 연중 ${v.mRank}위입니다.</p></div><div class="vizbox" style="margin-top:10px"><div class="metricrow c2" style="gap:8px">${mt('서울 도심 기준 이동', ac.car, `약 ${ac.km}km`)}${mt('철도', ac.train, ac.station)}${mt('권장 주차면수', `${fmt(v.parkNeed)}<small>면</small>`, '목표 방문객 기반 산출')}${mt('대중교통 접근성', `${ac.transitScore}<small>/100</small>`, ac.transitNote)}</div><p class="vizcap">권장 주차면수는 일평균 ${fmt(A.daily)}명 · 자가용 분담 60% · 동승 2.8명 · 회전율 3.5회를 적용한 값입니다.</p></div><div class="metricrow c2" style="margin-top:10px">${mt('외지인 방문 비율', `${R.outRatio}<small>%</small>`, '지역 내 소비 유발 기반')}${mt('체류형 방문 비율', `${R.stayRatio}<small>%</small>`, '숙박을 동반한 방문')}</div>`,
+        `<div class="vizbox">${vBars(MONTHS, R.monthly, m, { ref: 100, refLabel: '연평균 100' })}<p class="vizcap">${R.name}의 최근 5년 월별 관광수요 지수(연평균 100 기준). 개최 월 ${m + 1}월은 ${v.mIdx}로 연중 ${v.mRank}위입니다.</p></div><div class="vizbox weekly-demand-card"><div class="weekly-demand-head"><h5>직전년도 개최월 주차별 방문객 수</h5><span class="weekly-demand-basis">${R.name} · 2025년 10월 기준 (예시 데이터)</span></div><div class="weekly-demand-layout"><div class="weekly-demand-chart"><span class="weekly-demand-unit">(만 명)</span>${weeklyBars(weeklyVisitorData)}</div><div class="weekly-demand-insight"><span class="insight-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 18V11M12 18V6M18 18V9"/></svg></span><p>${weeklyVisitorPeak.label}의 방문객이 가장 많았습니다. 축제 운영 시 해당 시기의 교통·주차 혼잡에 유의할 필요가 있습니다.</p></div></div></div><div class="access-summary-grid"><div class="access-summary-card transit-summary">${accessIcon('transit')}<div class="access-summary-copy"><div class="access-summary-label">대중교통 접근성</div><div class="access-summary-value">주변 버스정류장 6개 · 역 1개</div><p>경춘선 가평역 (약 3.2km)<br />셔틀버스 운행 가능</p></div></div><div class="access-summary-card parking-summary">${accessIcon('parking')}<div class="access-summary-copy"><div class="access-summary-label">확보 주차면수</div><div class="access-summary-value">1,150<small>면</small></div><p>권장 1,837면 · 충족률 63%</p></div></div></div><p class="parking-basis">※ 권장 주차면수는 일평균 30,000명 · 자가용 분담 60% · 동승 2.8명 · 회전율 3.5회를 적용한 값입니다.</p>`,
       ) +
       sec(
         3,
