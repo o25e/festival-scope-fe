@@ -349,21 +349,6 @@ select:focus-visible {
   color: var(--brand);
   font-weight: 600;
 }
-.rangerow {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-.rangerow input[type='range'] {
-  flex: 1;
-  accent-color: var(--brand);
-}
-.rangeval {
-  font-size: 19px;
-  font-weight: 650;
-  min-width: 58px;
-  text-align: right;
-}
 .formfoot {
   display: flex;
   align-items: center;

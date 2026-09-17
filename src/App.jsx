@@ -308,15 +308,6 @@ function FormScreen({ plan, setPlan, step, setStep, onReview }) {
       ? plan.programs.filter((x) => x !== id)
       : [...plan.programs, id]
     update('programs', programs)
-    if (programs.length)
-      update(
-        'outdoor',
-        Math.round(
-          (PROGRAMS.filter((x) => programs.includes(x.id) && x.out).length /
-            programs.length) *
-            20,
-        ) * 5,
-      )
   }
   const names = ['축제 기본 정보', '개최 일정 · 장소', '프로그램 · 운영']
   return (
@@ -623,41 +614,6 @@ function FormScreen({ plan, setPlan, step, setStep, onReview }) {
                   ))}
                 </div>
               </Input>
-              <Input full label="야외 프로그램 비중">
-                <div className="rangerow">
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="5"
-                    value={plan.outdoor}
-                    onChange={(e) => update('outdoor', Number(e.target.value))}
-                  />
-                  <span className="rangeval">{plan.outdoor}%</span>
-                </div>
-              </Input>
-              <Input label="우천 대안">
-                <select
-                  value={plan.rainplan}
-                  onChange={(e) => update('rainplan', e.target.value)}
-                >
-                  <option value="none">없음</option>
-                  <option value="partial">일부 확보 (대체 공간 지정)</option>
-                  <option value="full">
-                    충분 (전 프로그램 대체 동선 확보)
-                  </option>
-                </select>
-              </Input>
-              <Input label="실내 대체공간 수용 인원" hint="동시 수용 기준">
-                <input
-                  type="number"
-                  min="0"
-                  step="50"
-                  value={plan.shelter || ''}
-                  onChange={(e) => update('shelter', Number(e.target.value))}
-                  placeholder="300"
-                />
-              </Input>
             </div>
           )}
           <div className="formfoot">
@@ -748,18 +704,6 @@ function ReviewScreen({ plan, onEdit, onAnalyze }) {
       PROGRAMS.filter((p) => plan.programs.includes(p.id))
         .map((p) => p.n)
         .join(', '),
-    ],
-    ['야외 프로그램 비중', `${plan.outdoor}%`],
-    [
-      '우천 대안',
-      <>
-        {plan.rainplan === 'none'
-          ? '없음'
-          : plan.rainplan === 'partial'
-            ? '일부 확보'
-            : '충분'}{' '}
-        <small>· 실내 대체 {fmt(plan.shelter)}명</small>
-      </>,
     ],
   ]
   return (
@@ -877,7 +821,7 @@ const ITEMS = [
     no: 5,
     scored: false,
     name: '날씨 리스크',
-    scope: '과거 동일 시기 기상 통계 × 야외 프로그램 비중 · 우천 대안',
+    scope: '과거 동일 시기 기상 통계 × 선택 프로그램 구성',
   },
   {
     key: 'link',
@@ -967,11 +911,8 @@ function cardData(item, A) {
       tone: v.v5 === '높음' ? 'r' : v.v5 === '보통' ? 'w' : 'g',
       metric: `${v.rainP}%`,
       unit: `${A.m + 1}월 동일 시기 강수 발생률`,
-      sub: [
-        ['야외 비중', `${A.p.outdoor}%`],
-        ['실내 대체 수용률', `${Math.round(v.shelterCov)}%`],
-      ],
-      read: `야외 비중 ${A.p.outdoor}%에 실내 대체 수용률이 ${Math.round(v.shelterCov)}%여서, 강수 시 ${v.shelterCov < 30 ? '프로그램 대부분이 중단됩니다.' : '일부 프로그램만 대체 운영이 가능합니다.'}`,
+      sub: [['기상 취약 프로그램', `${A.progs.filter((x) => x.out || x.wind || x.fog).length}개`]],
+      read: `동일 시기 강수 발생률은 ${v.rainP}%이며, 현재 선택한 프로그램 구성의 기상 취약도는 ${v.wRisk}점(${v.v5})입니다.`,
       bars: A.R.weather.rainYears,
       highlight: A.m,
     }
@@ -1196,7 +1137,7 @@ function ResultScreen({ A, onEdit, onReport, onOpen, openKey }) {
         />
         <p className="note" style={{ maxWidth: 'none' }}>
           분석 결과는 과거 데이터 기반의 타당성·리스크 진단입니다. 미래 방문객
-          수나 흥행 결과를 보장하지 않으며, 행사장 위치·일정·프로그램·우천 대안
+          수나 흥행 결과를 보장하지 않으며, 행사장 위치·일정·프로그램
           입력이 불완전하면 일부 항목의 정확도가 떨어집니다.
         </p>
       </div>
@@ -1334,11 +1275,6 @@ function gantt(rows, ps, pe, name) {
     )
   })
   return `${s}</svg>`
-}
-function gauge(pct, label, color) {
-  const r = 44,
-    c = 2 * Math.PI * r
-  return `<svg viewBox="0 0 110 110" style="width:110px;height:110px"><circle cx="55" cy="55" r="${r}" fill="none" stroke="#EAF0F4" stroke-width="11"/><circle cx="55" cy="55" r="${r}" fill="none" stroke="${color}" stroke-width="11" stroke-linecap="round" stroke-dasharray="${(c * pct) / 100} ${c}" transform="rotate(-90 55 55)"/><text x="55" y="54" text-anchor="middle" font-size="21" font-weight="700" fill="#132434">${Math.round(pct)}<tspan font-size="11">%</tspan></text><text x="55" y="70" text-anchor="middle" font-size="10" fill="#6C7D8C">${label}</text></svg>`
 }
 function groupBars(groups, colors) {
   const W = 470,
@@ -1594,7 +1530,7 @@ function getDetailHtml(item, A) {
       sec(
         1,
         '핵심 지표',
-        `<div class="metricrow c2">${mt('행사 구조 취약도', `${v.wRisk}<small>/100</small>`, '강수 40% · 야외 비중 35% · 대체 수용 25%', true)}${mt(`${m + 1}월 강수 발생률`, `${v.rainP}<small>%</small>`, `최근 10년 중 ${W.rainYears[m]}년 · 일 10mm 이상 ${W.heavyYears[m]}년`)}${mt('야외 프로그램 비중', `${p.outdoor}<small>%</small>`, `${A.progs.filter((x) => x.out).length}개 프로그램이 야외`)}${mt('실내 대체 수용률', `${Math.round(v.shelterCov)}<small>%</small>`, `대체 ${fmt(p.shelter)}석 / 동시 체류 추정 ${fmt(v.concurrent)}명`)}</div>`,
+        `<div class="metricrow c2">${mt('행사 기상 취약도', `${v.wRisk}<small>/100</small>`, '선택 프로그램과 과거 동일 시기 강수 통계 기반', true)}${mt(`${m + 1}월 강수 발생률`, `${v.rainP}<small>%</small>`, `최근 10년 중 ${W.rainYears[m]}년 · 일 10mm 이상 ${W.heavyYears[m]}년`)}</div>`,
       ) +
       sec(
         2,
@@ -1604,12 +1540,12 @@ function getDetailHtml(item, A) {
           W.rainYears.map((x) => x * 10),
           m,
           { h: 130 },
-        )}<p class="vizcap">${R.name} 월별 강수 발생률(최근 10년 중 강수 관측 연수 × 10%). ${W.note}.</p></div><div class="vizbox" style="margin-top:10px;display:flex;gap:16px;align-items:center">${gauge(p.outdoor, '야외 비중', '#C2634C')}<div style="flex:1"><table class="dt"><tr><th>취약 요소</th><th>발생 이력</th></tr>${v.wFlags.map((f) => `<tr><td><b>${f.t}</b> <span class="tagsm ${f.risk ? 'r' : 'n'}">${f.risk ? '취약' : '해당 없음'}</span><div style="color:var(--muted);font-size:11px;margin-top:2px">${f.p}</div></td><td style="font-size:11.5px">${f.d}</td></tr>`).join('')}</table></div></div><p class="vizcap" style="margin-top:9px">동시 체류 추정 인원은 일평균 ${fmt(A.daily)}명의 35%를 적용한 값입니다. 우천 대안 설정은 "${{ none: '없음', partial: '일부 확보', full: '충분' }[p.rainplan]}"입니다.</p>`,
+        )}<p class="vizcap">${R.name} 월별 강수 발생률(최근 10년 중 강수 관측 연수 × 10%). ${W.note}.</p></div><table class="dt" style="margin-top:10px"><tr><th>취약 요소</th><th>발생 이력</th></tr>${v.wFlags.map((f) => `<tr><td><b>${f.t}</b> <span class="tagsm ${f.risk ? 'r' : 'n'}">${f.risk ? '취약' : '해당 없음'}</span><div style="color:var(--muted);font-size:11px;margin-top:2px">${f.p}</div></td><td style="font-size:11.5px">${f.d}</td></tr>`).join('')}</table></div>`,
       ) +
       sec(
         3,
         '결과 해석',
-        `<div class="readbox read"><p>${m + 1}월 동일 시기에 강수가 관측된 해는 최근 10년 중 ${W.rainYears[m]}년(${v.rainP}%)입니다. 여기에 야외 프로그램 비중 ${p.outdoor}%와 실내 대체 수용률 ${Math.round(v.shelterCov)}%를 결합하면 행사 구조의 취약도는 <strong>${v.wRisk}점(${v.v5})</strong>입니다.</p><p>${
+        `<div class="readbox read"><p>${m + 1}월 동일 시기에 강수가 관측된 해는 최근 10년 중 ${W.rainYears[m]}년(${v.rainP}%)입니다. 선택한 프로그램 구성과 기상 이력을 결합한 행사 기상 취약도는 <strong>${v.wRisk}점(${v.v5})</strong>입니다.</p><p>${
           v.wFlags.filter((f) => f.risk).length
             ? `특히 ${v.wFlags
                 .filter((f) => f.risk)
@@ -1618,17 +1554,12 @@ function getDetailHtml(item, A) {
                   ' · ',
                 )} 요소가 현재 프로그램 구성과 직접 맞물립니다. ${v.wFlags.filter((f) => f.risk)[0].p} 계획이 기상 조건에 따라 취소 또는 축소될 수 있습니다.`
             : '현재 프로그램 구성에서 기상 조건과 직접 충돌하는 요소는 크지 않습니다.'
-        }</p><p>강수 시 동시 체류 ${fmt(v.concurrent)}명 중 실내로 수용 가능한 인원은 ${fmt(p.shelter)}명입니다. ${v.shelterCov < 30 ? '나머지 인원은 대기·귀가로 이어지며 만족도와 체류 시간이 함께 떨어집니다.' : '대체 동선을 안내하면 상당수를 유지할 수 있습니다.'}</p></div>`,
+        }</p></div>`,
       ) +
       sec(
         4,
         '권장 수정사항',
         recs([
-          {
-            p: v.shelterCov < 25 ? 1 : 2,
-            t: `실내 대체 수용 인원 ${fmt(Math.max(0, Math.round(v.concurrent * 0.5 - p.shelter)))}명 추가 확보`,
-            d: `동시 체류 추정 ${fmt(v.concurrent)}명의 절반 수준(${fmt(Math.round(v.concurrent * 0.5))}명)을 대체 수용 목표로 잡는 방식이 일반적입니다. 인근 체육관·문화예술회관·대형 텐트 구조물이 후보가 됩니다.`,
-          },
           ...v.wFlags
             .filter((f) => f.risk)
             .map((f) => ({
@@ -1646,15 +1577,6 @@ function getDetailHtml(item, A) {
                   ? '유료 프로그램이 있다면 우천 시 연기·환불 기준을 사전 공지해야 민원이 줄어듭니다. 판단 시점은 행사 시작 3시간 전으로 고정하는 방식이 흔합니다.'
                   : `${f.d}. ${f.p}에 대한 대체 운영 절차를 운영 매뉴얼에 미리 넣어 두면 현장 혼선이 줄어듭니다.`,
             })),
-          ...(p.rainplan === 'none'
-            ? [
-                {
-                  p: 1,
-                  t: '우천 대안을 기획안에 신설',
-                  d: '현재 우천 대안이 없음으로 입력되어 있습니다. 대체 공간과 축소 운영 시나리오가 없으면 강수 시 행사 전체가 중단됩니다.',
-                },
-              ]
-            : []),
         ]),
       ) +
       `<p class="note">이 진단은 미래 날씨를 예측하지 않습니다. 과거 동일 시기 기상 통계와 기획안의 구조적 취약성만 봅니다. 흥행 스코어에는 반영되지 않습니다.</p>`
@@ -1943,9 +1865,6 @@ export default function App() {
       start: '',
       end: '',
       programs: [],
-      outdoor: 85,
-      rainplan: 'partial',
-      shelter: 0,
     }),
     [analysis, setAnalysis] = useState(null),
     [openKey, setOpenKey] = useState(null)
