@@ -903,9 +903,6 @@ export const SAMPLE = {
   start: '2027-10-15',
   end: '2027-10-18',
   programs: ['media', 'astro', 'drone', 'market', 'stage'],
-  outdoor: 85,
-  rainplan: 'partial',
-  shelter: 300,
 }
 export const FLOW = [
   ['input', '기획안 입력'],
@@ -953,7 +950,10 @@ export function analyze(p) {
     days = Math.max(1, ddiff(sd, ed) + 1),
     daily = p.target / days,
     m = sd.getMonth(),
-    progs = PROGRAMS.filter((x) => p.programs.includes(x.id))
+    progs = PROGRAMS.filter((x) => p.programs.includes(x.id)),
+    weatherSensitiveShare = progs.length
+      ? (progs.filter((x) => x.out).length / progs.length) * 100
+      : 0
   const sims = [...T.sims, R.localSim],
     last = sims.map((s) => s.series[4]).sort((a, b) => a - b),
     median = last[Math.floor(last.length / 2)],
@@ -1058,12 +1058,9 @@ export function analyze(p) {
     heavy = W.heavyYears[m],
     wind = W.windYears[m],
     fog = W.fogYears[m],
-    concurrent = daily * 0.35,
-    shelterCov = clamp((p.shelter / concurrent) * 100, 0, 100),
-    mult = p.rainplan === 'none' ? 1.15 : p.rainplan === 'partial' ? 1 : 0.85,
     wRisk = Math.round(
       clamp(
-        (0.4 * rainP + 0.35 * p.outdoor + 0.25 * (100 - shelterCov)) * mult,
+        0.6 * rainP + 0.4 * weatherSensitiveShare,
         0,
         100,
       ),
@@ -1103,8 +1100,8 @@ export function analyze(p) {
   wFlags.push({
     t: '강수',
     d: `${MONTHS[m]} 동일 시기 강수 ${rainP}% (10년 중 ${W.rainYears[m]}년) · 일 10mm 이상 ${heavy}년`,
-    p: `야외 프로그램 비중 ${p.outdoor}%`,
-    risk: rainP >= 40 && p.outdoor >= 60,
+    p: `기상 민감 프로그램 ${progs.filter((x) => x.out).length}개`,
+    risk: rainP >= 40 && weatherSensitiveShare >= 60,
   })
   const P = R.poi,
     tourS = clamp((P.r15.tour / 40) * 100, 0, 100),
@@ -1177,8 +1174,6 @@ export function analyze(p) {
       heavy,
       wind,
       fog,
-      shelterCov,
-      concurrent,
       wRisk,
       v5,
       wFlags,
