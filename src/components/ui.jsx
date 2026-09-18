@@ -14,11 +14,21 @@ export function Button({
     </button>
   )
 }
-export function Input({ label, required, hint, error, full = false, children }) {
+export function Input({
+  label,
+  required,
+  auto = false,
+  hint,
+  error,
+  full = false,
+  children,
+}) {
   return (
     <div className={`field ${full ? 'full ' : ''}${error ? 'err' : ''}`}>
       <label>
-        {label} {required && <span className="req">필수</span>}{' '}
+        {label}{' '}
+        {auto && <span className="auto">AUTO</span>}{' '}
+        {required && <span className="req">필수</span>}{' '}
         {hint && <span className="hint">{hint}</span>}
       </label>
       {children}
@@ -36,4 +46,3 @@ export function WarningNotice({ children }) {
     </div>
   )
 }
-

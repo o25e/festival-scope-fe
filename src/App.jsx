@@ -71,7 +71,8 @@ export default function App() {
     [isRegisteringPlan, setIsRegisteringPlan] = useState(false),
     [registrationError, setRegistrationError] = useState(''),
     [festivalPlanResponse, setFestivalPlanResponse] = useState(null),
-    [sourceFileName, setSourceFileName] = useState('')
+    [sourceFileName, setSourceFileName] = useState(''),
+    [autoFilledFields, setAutoFilledFields] = useState({})
   const registrationInFlightRef = useRef(false)
   const A = useMemo(
       () => analysis || (stage === 'input' || stage === 'documents' ? null : analyze(plan)),
@@ -110,6 +111,7 @@ export default function App() {
         }
         if (stage !== 'report') {
           setPlan(document.plan || { ...EMPTY_PLAN, planName: document.title, name: document.title, org: document.region })
+          setAutoFilledFields({})
           setAnalysis(document.plan ? analyze(document.plan) : null)
           setStage('report')
         }
@@ -153,6 +155,7 @@ export default function App() {
       setIsSample(false)
       setActiveDocument(null)
       setPlan(EMPTY_PLAN)
+      setAutoFilledFields({})
       setAnalysis(null)
       setStep(1)
       setRegistrationError('')
@@ -195,6 +198,7 @@ export default function App() {
     if (!parsed.hasValues) return
 
     setPlan(parsed.plan)
+    setAutoFilledFields(parsed.autoFilledFields || {})
     setSourceFileName(fileName || '')
     setActiveDocument(null)
     setAnalysis(null)
@@ -260,6 +264,7 @@ export default function App() {
     }
     setOpenKey(null)
     setPlan(samplePlan)
+    setAutoFilledFields({})
     setAnalysis(analyze(samplePlan))
     setIsSample(true)
     setStage('report')
@@ -299,6 +304,7 @@ export default function App() {
           onOpenReport={(document) => {
             setActiveDocument(document)
             setPlan(document.plan || EMPTY_PLAN)
+            setAutoFilledFields({})
             setAnalysis(document.plan ? analyze(document.plan) : null)
             setStage('report')
             navigate(`/reports/${encodeURIComponent(document.id)}`)
@@ -311,6 +317,8 @@ export default function App() {
           setPlan={setPlan}
           step={step}
           setStep={setStep}
+          autoFilledFields={autoFilledFields}
+          setAutoFilledFields={setAutoFilledFields}
           onReview={(p) => {
             setPlan(p)
             setRegistrationError('')
