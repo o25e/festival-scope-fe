@@ -4,7 +4,6 @@ import {
   getFestivalTopics,
   PROGRAMS,
   REGIONS,
-  SAMPLE,
 } from '../../data/prototype'
 import { Button, Input, WarningNotice } from '../../components/ui'
 import {
@@ -83,14 +82,6 @@ export function FormScreen({
     )
   }
 
-  const fillSample = () => {
-    setPlan({
-      ...SAMPLE,
-      target: Number(SAMPLE.target),
-      festivalThemes: SAMPLE.festivalThemes.map((pair) => ({ ...pair })),
-    })
-    setAutoFilledFields?.({})
-  }
   const validate = () => {
     const e = []
     if (step >= 1 && !String(plan.planName ?? '').trim()) e.push('기획안명')
@@ -484,16 +475,6 @@ export function FormScreen({
               이전
             </Button>
             <span className="spacer" />
-            <Button
-              ghost
-              small
-              onClick={() => {
-                fillSample()
-                setErrors([])
-              }}
-            >
-              예시 기획안 채우기
-            </Button>
             <Button primary onClick={next}>
               {step === 3 ? '입력 확인' : '다음'}
             </Button>
