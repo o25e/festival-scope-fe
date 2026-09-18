@@ -73,6 +73,7 @@ export function FormScreen({ plan, setPlan, step, setStep, onReview }) {
     })
   const validate = () => {
     const e = []
+    if (step >= 1 && !String(plan.planName ?? '').trim()) e.push('기획안명')
     if (step >= 1 && !plan.name.trim()) e.push('축제명')
     if (step >= 1 && !plan.target) e.push('목표 방문객')
     if (step >= 1 && pairs.some((pair) => !pair.type || !pair.topic.trim()))
@@ -142,6 +143,19 @@ export function FormScreen({ plan, setPlan, step, setStep, onReview }) {
             <div className="fieldgrid">
               <Input
                 full
+                label="기획안명"
+                required
+                error={errors.includes('기획안명')}
+              >
+                <input
+                  type="text"
+                  value={plan.planName}
+                  onChange={(e) => update('planName', e.target.value)}
+                  placeholder="예: 2026 서울 가을 문화축제 기획안"
+                />
+              </Input>
+              <Input
+                full
                 label="축제명"
                 required
                 error={errors.includes('축제명')}
@@ -160,6 +174,60 @@ export function FormScreen({ plan, setPlan, step, setStep, onReview }) {
                   onChange={(e) => update('org', e.target.value)}
                   placeholder="예: 강원특별자치도 영월군"
                 />
+              </Input>
+              <Input
+                label="개최 형태"
+                required
+                error={errors.includes('최초 개최 이력(4자리 연도)')}
+              >
+                <div className="event-type-and-history">
+                  <div className="event-type-options">
+                    <label
+                      className={`event-type-option ${plan.eventType === 'existing' ? 'on' : ''}`}
+                    >
+                      <input
+                        type="radio"
+                        name="eventType"
+                        value="existing"
+                        checked={plan.eventType === 'existing'}
+                        onChange={(e) => updateEventType(e.target.value)}
+                      />
+                      기존 개최
+                    </label>
+                    <label
+                      className={`event-type-option ${plan.eventType === 'new' ? 'on' : ''}`}
+                    >
+                      <input
+                        type="radio"
+                        name="eventType"
+                        value="new"
+                        checked={plan.eventType === 'new'}
+                        onChange={(e) => updateEventType(e.target.value)}
+                      />
+                      신규 개최
+                    </label>
+                  </div>
+                  {plan.eventType === 'existing' && (
+                    <div className="event-history-inline">
+                      <label htmlFor="firstHeldYear">최초 개최 이력</label>
+                      <input
+                        id="firstHeldYear"
+                        type="number"
+                        min="1000"
+                        max={new Date().getFullYear()}
+                        inputMode="numeric"
+                        value={plan.firstHeldYear || ''}
+                        onChange={(e) =>
+                          update(
+                            'firstHeldYear',
+                            e.target.value ? Number(e.target.value) : null,
+                          )
+                        }
+                        placeholder="예: 2018"
+                      />
+                    </div>
+                  )}
+                </div>
               </Input>
               <Input
                 full
@@ -248,60 +316,6 @@ export function FormScreen({ plan, setPlan, step, setStep, onReview }) {
                   onChange={(e) => update('target', Number(e.target.value))}
                   placeholder="120000"
                 />
-              </Input>
-              <Input
-                label="개최 형태"
-                required
-                error={errors.includes('최초 개최 이력(4자리 연도)')}
-              >
-                <div className="event-type-and-history">
-                  <div className="event-type-options">
-                    <label
-                      className={`event-type-option ${plan.eventType === 'existing' ? 'on' : ''}`}
-                    >
-                      <input
-                        type="radio"
-                        name="eventType"
-                        value="existing"
-                        checked={plan.eventType === 'existing'}
-                        onChange={(e) => updateEventType(e.target.value)}
-                      />
-                      기존 개최
-                    </label>
-                    <label
-                      className={`event-type-option ${plan.eventType === 'new' ? 'on' : ''}`}
-                    >
-                      <input
-                        type="radio"
-                        name="eventType"
-                        value="new"
-                        checked={plan.eventType === 'new'}
-                        onChange={(e) => updateEventType(e.target.value)}
-                      />
-                      신규 개최
-                    </label>
-                  </div>
-                  {plan.eventType === 'existing' && (
-                    <div className="event-history-inline">
-                      <label htmlFor="firstHeldYear">최초 개최 이력</label>
-                      <input
-                        id="firstHeldYear"
-                        type="number"
-                        min="1000"
-                        max={new Date().getFullYear()}
-                        inputMode="numeric"
-                        value={plan.firstHeldYear || ''}
-                        onChange={(e) =>
-                          update(
-                            'firstHeldYear',
-                            e.target.value ? Number(e.target.value) : null,
-                          )
-                        }
-                        placeholder="예: 2018"
-                      />
-                    </div>
-                  )}
-                </div>
               </Input>
             </div>
           )}

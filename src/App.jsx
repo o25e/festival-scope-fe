@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { analyze, SAMPLE } from './data/prototype'
+import { createFestivalPlan } from './api/festivalPlans'
 import { Header } from './components/AppHeader'
 import { useAuth } from './auth/AuthProvider'
 import { LoginModal } from './features/auth/LoginModal'
@@ -11,6 +12,7 @@ import { ITEMS } from './features/analysis/analysisData'
 import { ResultScreen } from './features/analysis/ResultsPage'
 import { Panel } from './features/analysis/DetailPanel'
 import { ReportScreen } from './features/report/ReportPage'
+import { buildFestivalPlanPayload } from './features/input/festivalPlanPayload'
 
 export default function App() {
   const { isAuthenticated, isPending, login, signup, logout } = useAuth()
@@ -20,6 +22,7 @@ export default function App() {
     [isSample, setIsSample] = useState(false),
     [step, setStep] = useState(1),
     [plan, setPlan] = useState({
+      planName: '',
       name: '',
       org: '',
       festivalThemes: [{ type: '', topic: '' }],
@@ -36,7 +39,11 @@ export default function App() {
       programs: [],
     }),
     [analysis, setAnalysis] = useState(null),
-    [openKey, setOpenKey] = useState(null)
+    [openKey, setOpenKey] = useState(null),
+    [isRegisteringPlan, setIsRegisteringPlan] = useState(false),
+    [registrationError, setRegistrationError] = useState(''),
+    [festivalPlanResponse, setFestivalPlanResponse] = useState(null)
+  const registrationInFlightRef = useRef(false)
   const A = useMemo(
       () => analysis || (stage === 'input' ? null : analyze(plan)),
       [analysis, plan, stage],
@@ -74,16 +81,45 @@ export default function App() {
       setStage(isAuthenticated ? 'input' : 'landing')
       setStep(1)
       setAnalysis(null)
+      setRegistrationError('')
+      setFestivalPlanResponse(null)
     },
     goEdit = () => {
       setOpenKey(null)
       setStep(1)
+      setRegistrationError('')
+      setFestivalPlanResponse(null)
       setStage('input')
     },
     finish = () => {
       setAnalysis(analyze(plan))
       setStage('result')
     }
+
+  const handleAnalyze = async () => {
+    if (registrationInFlightRef.current) return
+
+    registrationInFlightRef.current = true
+    setIsRegisteringPlan(true)
+    setRegistrationError('')
+
+    try {
+      const payload = buildFestivalPlanPayload(plan)
+      const response = await createFestivalPlan(payload)
+      // ApiResponse.data is intentionally untyped in the backend OpenAPI spec.
+      // Keep the complete response so a future analysis request can use the
+      // server-issued identifier without guessing its field name here.
+      setFestivalPlanResponse(response)
+      setStage('loading')
+    } catch (error) {
+      setRegistrationError(
+        error?.message || '축제 기획안 등록에 실패했습니다. 다시 시도해주세요.',
+      )
+    } finally {
+      registrationInFlightRef.current = false
+      setIsRegisteringPlan(false)
+    }
+  }
 
   const openLogin = () => {
     setLoginError('')
@@ -151,6 +187,8 @@ export default function App() {
           setStep={setStep}
           onReview={(p) => {
             setPlan(p)
+            setRegistrationError('')
+            setFestivalPlanResponse(null)
             setStage('review')
           }}
         />
@@ -158,8 +196,10 @@ export default function App() {
       {stage === 'review' && (
         <ReviewScreen
           plan={plan}
-          onEdit={() => setStage('input')}
-          onAnalyze={() => setStage('loading')}
+          onEdit={goEdit}
+          onAnalyze={handleAnalyze}
+          isSubmitting={isRegisteringPlan}
+          error={registrationError}
         />
       )}
       {stage === 'loading' && <LoadingScreen plan={plan} onDone={finish} />}

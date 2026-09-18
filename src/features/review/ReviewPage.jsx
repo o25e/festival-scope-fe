@@ -12,13 +12,21 @@ const themeLabel = (pair) =>
 const eventTypeLabel = (eventType) =>
   eventType === 'new' ? '신규 개최' : '기존 개최'
 
-export function ReviewScreen({ plan, onEdit, onAnalyze }) {
+export function ReviewScreen({
+  plan,
+  onEdit,
+  onAnalyze,
+  isSubmitting = false,
+  error = '',
+}) {
   const R = REGIONS[plan.region],
     days = Math.max(
       1,
       Math.round((new Date(plan.end) - new Date(plan.start)) / 86400000) + 1,
     )
   const rows = [
+    ['기획안명', plan.planName],
+    ['축제명', plan.name],
     ['주최 기관', plan.org ? plan.org : <small>미입력</small>],
     [
       '축제 유형 및 주제',
@@ -83,7 +91,7 @@ export function ReviewScreen({ plan, onEdit, onAnalyze }) {
         </p>
         <div className="formcard">
           <div className="formhead">
-            <h3 className="sec-h">{plan.name}</h3>
+            <h3 className="sec-h">{plan.planName}</h3>
             <Button small onClick={onEdit}>
               기획안 수정
             </Button>
@@ -96,13 +104,23 @@ export function ReviewScreen({ plan, onEdit, onAnalyze }) {
               </div>
             ))}
           </div>
+          {error && (
+            <div className="alert show" role="alert">
+              {error}
+            </div>
+          )}
           <div className="formfoot">
             <span className="lbl">
               분석은 과거 데이터 기반의 타당성·리스크 진단이며 미래 흥행을
               보장하지 않습니다.
             </span>
             <span className="spacer" />
-            <Button primary onClick={onAnalyze}>
+            <Button
+              primary
+              onClick={onAnalyze}
+              disabled={isSubmitting}
+              aria-busy={isSubmitting}
+            >
               분석 실행
             </Button>
           </div>
