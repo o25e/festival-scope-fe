@@ -280,19 +280,115 @@ export const THEMES = {
   },
 }
 
+// `topic` stores the API value (the topic code). The label is only used for
+// display so the input, review, analysis and any future request payload share
+// one source of truth.
 export const FESTIVAL_TYPES = {
-  culture: '문화·예술',
-  food: '음식·미식',
-  nature: '자연·생태',
-  history: '역사·전통',
-  music: '음악·공연',
-  family: '가족·체험',
+  culture: {
+    label: '문화예술',
+    topics: [
+      { code: 'CA01', label: '음악·공연' },
+      { code: 'CA02', label: '미술·공예·디자인' },
+      { code: 'CA03', label: '빛·미디어아트' },
+      { code: 'CA04', label: '영화·영상·콘텐츠' },
+      { code: 'CA05', label: '문학·책' },
+      { code: 'CA06', label: '복합문화예술' },
+    ],
+  },
+  nature: {
+    label: '자연생태',
+    topics: [
+      { code: 'NE01', label: '꽃·식물' },
+      { code: 'NE02', label: '숲·산·걷기' },
+      { code: 'NE03', label: '강·바다·수변' },
+      { code: 'NE04', label: '계절·자연경관' },
+      { code: 'NE05', label: '생태·환경' },
+    ],
+  },
+  community: {
+    label: '주민화합',
+    topics: [
+      { code: 'CC01', label: '주민화합·마을' },
+      { code: 'CC02', label: '먹거리·야시장' },
+      { code: 'CC03', label: '스포츠·레저' },
+      { code: 'CC04', label: '가족·어린이' },
+      { code: 'CC05', label: '지역상권·마켓' },
+    ],
+  },
+  history: {
+    label: '전통역사',
+    topics: [
+      { code: 'HT01', label: '역사인물·사건' },
+      { code: 'HT02', label: '전통문화·민속' },
+      { code: 'HT03', label: '문화유산' },
+      { code: 'HT04', label: '전통공연·무형유산' },
+      { code: 'HT05', label: '전통의례·제례' },
+    ],
+  },
+  localSpecialty: {
+    label: '지역특산물',
+    topics: [
+      { code: 'LS01', label: '농산물·과일' },
+      { code: 'LS02', label: '수산물·해산물' },
+      { code: 'LS03', label: '축산물' },
+      { code: 'LS04', label: '음식·향토먹거리' },
+      { code: 'LS05', label: '주류·차·음료' },
+      { code: 'LS06', label: '특산품·공예' },
+    ],
+  },
+}
+
+export const getFestivalTopics = (type) => FESTIVAL_TYPES[type]?.topics || []
+
+export const getFestivalTypeLabel = (type) =>
+  FESTIVAL_TYPES[type]?.label || type || '미입력'
+
+export const getFestivalTopicLabel = (type, topic) => {
+  const value = String(topic || '').trim()
+  if (!value) return '미입력'
+  return (
+    getFestivalTopics(type).find(
+      (option) => option.code === value || option.label === value,
+    )?.label || value
+  )
+}
+
+const TOPIC_THEME_KEYS = {
+  CA01: 'music',
+  CA02: 'character',
+  CA03: 'starlight',
+  CA04: 'character',
+  CA05: 'tradition',
+  CA06: 'music',
+  NE01: 'flower',
+  NE02: 'flower',
+  NE03: 'marine',
+  NE04: 'flower',
+  NE05: 'starlight',
+  CC01: 'family',
+  CC02: 'localfood',
+  CC03: 'marine',
+  CC04: 'family',
+  CC05: 'localfood',
+  HT01: 'tradition',
+  HT02: 'tradition',
+  HT03: 'tradition',
+  HT04: 'tradition',
+  HT05: 'tradition',
+  LS01: 'localfood',
+  LS02: 'localfood',
+  LS03: 'localfood',
+  LS04: 'localfood',
+  LS05: 'tradition',
+  LS06: 'character',
 }
 
 export function getThemeForTopic(topic) {
   const value = String(topic || '')
     .trim()
     .toLowerCase()
+  const codeTheme = THEMES[TOPIC_THEME_KEYS[value.toUpperCase()]]
+  if (codeTheme) return codeTheme
   const match = Object.entries(THEMES).find(
     ([key, theme]) =>
       value === key ||
@@ -868,8 +964,8 @@ export const SAMPLE = {
   name: '영월 가을별빛 야행축제',
   org: '강원특별자치도 영월군',
   festivalThemes: [
-    { type: 'nature', topic: '별빛·천문' },
-    { type: 'culture', topic: '야간 문화 체험' },
+    { type: 'nature', topic: 'NE02' },
+    { type: 'culture', topic: 'CA03' },
   ],
   eventType: 'existing',
   firstHeldYear: 2018,
@@ -923,7 +1019,7 @@ export function analyze(p) {
     historyLabel = firstHeldYear ? ` · 최초 개최 ${firstHeldYear}년` : '',
     T = {
       ...baseTheme,
-      name: `${topicPairs.map((pair) => `${FESTIVAL_TYPES[pair.type] || pair.type || '미분류'} · ${pair.topic || '미입력'}`).join(' / ') || baseTheme.name} · ${eventTypeLabel}${historyLabel}`,
+      name: `${topicPairs.map((pair) => `${getFestivalTypeLabel(pair.type)} · ${getFestivalTopicLabel(pair.type, pair.topic)}`).join(' / ') || baseTheme.name} · ${eventTypeLabel}${historyLabel}`,
     },
     sd = dparse(p.start),
     ed = dparse(p.end),

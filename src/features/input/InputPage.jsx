@@ -1,5 +1,11 @@
 import { useState } from 'react'
-import { FESTIVAL_TYPES, PROGRAMS, REGIONS, SAMPLE } from '../../data/prototype'
+import {
+  FESTIVAL_TYPES,
+  getFestivalTopics,
+  PROGRAMS,
+  REGIONS,
+  SAMPLE,
+} from '../../data/prototype'
 import { Button, Input, WarningNotice } from '../../components/ui'
 import {
   VenueLocationCard,
@@ -26,7 +32,19 @@ export function FormScreen({ plan, setPlan, step, setStep, onReview }) {
       festivalThemes: (p.festivalThemes?.length
         ? p.festivalThemes
         : [{ type: '', topic: '' }]
-      ).map((pair, i) => (i === index ? { ...pair, [key]: value } : pair)),
+      ).map((pair, i) => {
+        if (i !== index) return pair
+        if (key !== 'type') return { ...pair, [key]: value }
+
+        const topicIsValid = getFestivalTopics(value).some(
+          (topic) => topic.code === pair.topic,
+        )
+        return {
+          ...pair,
+          type: value,
+          topic: topicIsValid ? pair.topic : '',
+        }
+      }),
     }))
   const addPair = () =>
     setPlan((p) =>
@@ -162,22 +180,34 @@ export function FormScreen({ plan, setPlan, step, setStep, onReview }) {
                         >
                           <option value="">축제 유형 선택</option>
                           {Object.entries(FESTIVAL_TYPES).map(
-                            ([key, label]) => (
+                            ([key, { label }]) => (
                               <option key={key} value={key}>
                                 {label}
                               </option>
                             ),
                           )}
                         </select>
-                        <input
-                          type="text"
+                        <select
                           aria-label={`축제 주제 ${index + 1}`}
                           value={pair.topic}
+                          disabled={!pair.type}
                           onChange={(e) =>
                             updatePair(index, 'topic', e.target.value)
                           }
-                          placeholder="예: 별빛·천문"
-                        />
+                        >
+                          <option value="">
+                            {pair.type
+                              ? '축제 주제 선택'
+                              : '먼저 축제 유형을 선택하세요'}
+                          </option>
+                          {getFestivalTopics(pair.type).map(
+                            ({ code, label }) => (
+                              <option key={code} value={code}>
+                                {label}
+                              </option>
+                            ),
+                          )}
+                        </select>
                       </div>
                       {index === 0 && (
                         <Button

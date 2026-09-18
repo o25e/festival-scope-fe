@@ -1,9 +1,14 @@
 import { Button } from '../../components/ui'
-import { FESTIVAL_TYPES, PROGRAMS, REGIONS } from '../../data/prototype'
+import {
+  getFestivalTopicLabel,
+  getFestivalTypeLabel,
+  PROGRAMS,
+  REGIONS,
+} from '../../data/prototype'
 import { fmt } from '../../utils/formatters'
 
 const themeLabel = (pair) =>
-  `${FESTIVAL_TYPES[pair.type] || pair.type || '미입력'} · ${pair.topic || '미입력'}`
+  `${getFestivalTypeLabel(pair.type)} · ${getFestivalTopicLabel(pair.type, pair.topic)}`
 const eventTypeLabel = (eventType) =>
   eventType === 'new' ? '신규 개최' : '기존 개최'
 
