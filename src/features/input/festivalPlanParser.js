@@ -1,8 +1,9 @@
 import {
   FESTIVAL_TYPES,
   getFestivalTopics,
+  getRegionOption,
+  getRegionParts,
   PROGRAMS,
-  REGIONS,
 } from '../../data/prototype'
 
 const EVENT_TYPE_BY_STATUS = {
@@ -24,53 +25,57 @@ const nonEmptyText = (value) => {
 }
 
 const REGION_SIDO_ALIASES = {
+  서울특별시: '서울',
+  부산광역시: '부산',
+  대구광역시: '대구',
+  인천광역시: '인천',
+  광주광역시: '광주',
+  대전광역시: '대전',
+  울산광역시: '울산',
+  세종특별자치시: '세종',
+  경기도: '경기',
   강원도: '강원',
   강원특별자치도: '강원',
+  충청북도: '충북',
+  충청남도: '충남',
+  전라북도: '전북',
+  전북특별자치도: '전북',
   전라남도: '전남',
   경상북도: '경북',
-  충청남도: '충남',
-}
-
-const normalizeRegionName = (value) => {
-  const [sido, ...sigunguParts] = normalize(value).split(' ')
-  return [REGION_SIDO_ALIASES[sido] || sido, ...sigunguParts]
-    .filter(Boolean)
-    .join(' ')
+  경상남도: '경남',
+  제주특별자치도: '제주',
 }
 
 const finiteNumber = (value) => {
   if (value === null || value === undefined || value === '') return null
-  const number = Number(value)
+  const normalizedValue = typeof value === 'string'
+    ? value.trim().replaceAll(',', '').replace(/명$/, '')
+    : value
+  const number = Number(normalizedValue)
   return Number.isFinite(number) ? number : null
 }
 
-const getRegionKey = (sido, sigungu) => {
-  const parsedRegion = normalize(
-    sigungu === undefined ? sido : [sido, sigungu].filter(Boolean).join(' '),
-  )
-  if (!parsedRegion) return null
-
-  if (Object.prototype.hasOwnProperty.call(REGIONS, parsedRegion)) {
-    return parsedRegion
-  }
-
-  return (
-    Object.entries(REGIONS).find(
-      ([, region]) => normalizeRegionName(region.name) === normalizeRegionName(parsedRegion),
-    )?.[0] || null
-  )
-}
-
-const getParsedRegionName = (parsed) => {
+const getParsedRegionParts = (parsed) => {
   const regionValue =
     parsed.region && typeof parsed.region === 'object' ? parsed.region : {}
-  const sido = parsed.sido ?? parsed.province ?? regionValue.sido
-  const sigungu =
+  let sido = parsed.sido ?? parsed.province ?? regionValue.sido
+  let sigungu =
     parsed.sigungu ?? parsed.cityCounty ?? parsed.county ?? regionValue.sigungu
-  const sidoAndSigungu = [sido, sigungu].map(normalize).filter(Boolean).join(' ')
-  if (sidoAndSigungu) return sidoAndSigungu
+  const fallback = nonEmptyText(parsed.regionName) ||
+    (typeof parsed.region === 'string' ? nonEmptyText(parsed.region) : null)
+  if ((!sido || !sigungu) && fallback) {
+    const [fallbackSido, ...fallbackSigunguParts] = fallback.split(' ')
+    sido = sido || fallbackSido
+    sigungu = sigungu || fallbackSigunguParts.join(' ')
+  }
+  sido = normalize(sido)
+  sigungu = normalize(sigungu)
+  const canonicalSido = REGION_SIDO_ALIASES[sido] || sido
 
-  return nonEmptyText(parsed.regionName) || nonEmptyText(parsed.region)
+  const knownRegion = getRegionOption(canonicalSido, sigungu)
+  return knownRegion
+    ? { sido: knownRegion.sido, sigungu: knownRegion.sigungu }
+    : { sido: sido || null, sigungu: sigungu || null }
 }
 
 const getThemePair = (code) => {
@@ -122,8 +127,10 @@ const buildVenueLocation = (plan, parsed, patch) => {
     ...(longitude !== null
       ? { longitude, lon: longitude }
       : {}),
-    regionKey: patch.region || plan.region,
+    sido: patch.sido || plan.sido,
+    sigungu: patch.sigungu || plan.sigungu,
   }
+  delete location.regionKey
 
   if (location.name && location.address) {
     location.mapUrl = `https://map.naver.com/p/search/${encodeURIComponent(
@@ -134,12 +141,40 @@ const buildVenueLocation = (plan, parsed, patch) => {
   return location
 }
 
+export function normalizeFestivalPlan(plan = {}) {
+  const legacyRegionParts = getRegionParts(plan.region)
+  const parsedRegionParts = getParsedRegionParts({ region: plan.region })
+  const maxCapacity =
+    plan.maxCapacity ?? finiteNumber(plan.venueCapacity) ?? null
+  const next = {
+    ...plan,
+    sido: plan.sido || legacyRegionParts?.sido || parsedRegionParts.sido || '',
+    sigungu:
+      plan.sigungu || legacyRegionParts?.sigungu || parsedRegionParts.sigungu || '',
+    maxCapacity,
+  }
+
+  if (next.venueLocation) {
+    next.venueLocation = {
+      ...next.venueLocation,
+      sido: next.venueLocation.sido || next.sido,
+      sigungu: next.venueLocation.sigungu || next.sigungu,
+    }
+    delete next.venueLocation.regionKey
+  }
+
+  delete next.region
+  delete next.venueCapacity
+  return next
+}
+
 export function mergeParsedFestivalPlan(plan, response) {
   const parsed = response?.data && typeof response.data === 'object'
     ? response.data
     : response
   if (!parsed || typeof parsed !== 'object') return { plan, hasValues: false }
 
+  const basePlan = normalizeFestivalPlan(plan)
   const patch = {}
   const planName = nonEmptyText(parsed.planName)
   const festivalName = nonEmptyText(parsed.festivalName)
@@ -147,7 +182,9 @@ export function mergeParsedFestivalPlan(plan, response) {
   const endDate = nonEmptyText(parsed.endDate)
   const venueName = nonEmptyText(parsed.venueName)
   const targetVisitorCount = finiteNumber(parsed.targetVisitorCount)
-  const capacity = finiteNumber(parsed.capacity)
+  const capacity = finiteNumber(
+    parsed.capacity ?? parsed.maxCapacity ?? parsed.maximumCapacity ?? parsed.venueCapacity,
+  )
   const firstHeldYear = finiteNumber(parsed.firstHeldYear)
 
   if (planName) patch.planName = planName
@@ -157,8 +194,7 @@ export function mergeParsedFestivalPlan(plan, response) {
   if (venueName) patch.venue = venueName
   if (targetVisitorCount !== null && targetVisitorCount >= 0)
     patch.target = targetVisitorCount
-  if (capacity !== null && capacity >= 0)
-    patch.venueCapacity = String(capacity)
+  if (capacity !== null && capacity >= 0) patch.maxCapacity = capacity
 
   const eventType = EVENT_TYPE_BY_STATUS[normalize(parsed.festivalStatus)]
   if (eventType) patch.eventType = eventType
@@ -174,17 +210,11 @@ export function mergeParsedFestivalPlan(plan, response) {
   const venueType = VENUE_TYPE_BY_API_VALUE[normalize(parsed.venueType)]
   if (venueType) patch.venueType = venueType
 
-  const parsedRegionName = getParsedRegionName(parsed)
-  const region = getRegionKey(parsedRegionName)
-  if (region) patch.region = region
-  if (parsedRegionName) {
-    patch.org =
-      parsedRegionName && !Object.prototype.hasOwnProperty.call(REGIONS, parsedRegionName)
-        ? parsedRegionName
-        : region
-          ? REGIONS[region].name
-          : parsedRegionName
-  }
+  const { sido, sigungu } = getParsedRegionParts(parsed)
+  if (sido) patch.sido = sido
+  if (sigungu) patch.sigungu = sigungu
+  if (sido && sigungu) patch.org = `${sido} ${sigungu}`
+  else if (sido && basePlan.sido !== sido) patch.sigungu = ''
 
   const themePairs = Array.isArray(parsed.themes)
     ? parsed.themes.map((theme) => getThemePair(theme?.code)).filter(Boolean)
@@ -194,11 +224,11 @@ export function mergeParsedFestivalPlan(plan, response) {
   const programIds = getProgramIds(parsed.programNames)
   if (programIds.length) patch.programs = programIds
 
-  const venueLocation = buildVenueLocation(plan, parsed, patch)
+  const venueLocation = buildVenueLocation(basePlan, parsed, patch)
   if (venueLocation) patch.venueLocation = venueLocation
 
   return {
-    plan: { ...plan, ...patch },
+    plan: { ...basePlan, ...patch },
     hasValues: Object.keys(patch).length > 0,
     appliedFields: Object.keys(patch),
     autoFilledFields: Object.fromEntries(
@@ -207,8 +237,9 @@ export function mergeParsedFestivalPlan(plan, response) {
   }
 }
 
-export const isResolvedVenueLocation = (location, venue, regionKey) =>
+export const isResolvedVenueLocation = (location, venue, region) =>
   normalize(location?.name) === normalize(venue) &&
-  normalize(location?.regionKey) === normalize(regionKey) &&
+  normalize(location?.sido) === normalize(region?.sido) &&
+  normalize(location?.sigungu) === normalize(region?.sigungu) &&
   Boolean(nonEmptyText(location?.address)) &&
   hasResolvedCoordinates(location)

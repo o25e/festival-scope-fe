@@ -1,4 +1,4 @@
-import { PROGRAMS, REGIONS } from '../../data/prototype'
+import { PROGRAMS } from '../../data/prototype'
 
 const FESTIVAL_STATUS_BY_EVENT_TYPE = {
   existing: 'EXISTING',
@@ -11,7 +11,7 @@ const VENUE_TYPE_BY_UI_VALUE = {
   mixed: 'MIXED',
 }
 
-const parseInteger = (value, fieldLabel, { optional = false } = {}) => {
+const parseInteger = (value, fieldLabel, { optional = false, min } = {}) => {
   const text = String(value ?? '').trim().replaceAll(',', '')
   if (!text || text === '미정') {
     if (optional) return null
@@ -26,6 +26,9 @@ const parseInteger = (value, fieldLabel, { optional = false } = {}) => {
   if (!Number.isSafeInteger(number)) {
     throw new Error(`${fieldLabel}의 값이 너무 큽니다.`)
   }
+  if (min !== undefined && number < min) {
+    throw new Error(`${fieldLabel}은(는) ${min} 이상이어야 합니다.`)
+  }
   return number
 }
 
@@ -37,11 +40,9 @@ const parseCoordinate = (value, fieldLabel) => {
   return number
 }
 
-const getRegionParts = (regionKey) => {
-  const regionName = String(REGIONS[regionKey]?.name || '').trim()
-  const [sido, ...sigunguParts] = regionName.split(/\s+/)
-  const sigungu = sigunguParts.join(' ')
-
+const getRegionParts = (plan) => {
+  const sido = String(plan.sido ?? '').trim()
+  const sigungu = String(plan.sigungu ?? '').trim()
   if (!sido || !sigungu) {
     throw new Error('개최 지역을 확인해주세요.')
   }
@@ -60,7 +61,7 @@ export function buildFestivalPlanPayload(plan) {
     throw new Error('축제 개최 형태 또는 행사장 유형을 확인해주세요.')
   }
 
-  const { sido, sigungu } = getRegionParts(plan.region)
+  const { sido, sigungu } = getRegionParts(plan)
   const themeCodes = (plan.festivalThemes || [])
     .map((pair) => String(pair.topic || '').trim())
     .filter(Boolean)
@@ -71,8 +72,9 @@ export function buildFestivalPlanPayload(plan) {
     plan.eventType === 'new'
       ? null
       : parseInteger(plan.firstHeldYear, '최초 개최 연도', { optional: true })
-  const capacity = parseInteger(plan.venueCapacity, '행사장 수용 규모', {
+  const capacity = parseInteger(plan.maxCapacity, '최대 수용 인원', {
     optional: true,
+    min: 0,
   })
 
   return {

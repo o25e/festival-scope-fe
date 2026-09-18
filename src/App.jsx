@@ -14,7 +14,10 @@ import { Panel } from './features/analysis/DetailPanel'
 import { ReportScreen } from './features/report/ReportPage'
 import { DocumentsPage } from './features/documents/DocumentsPage'
 import { buildFestivalPlanPayload } from './features/input/festivalPlanPayload'
-import { mergeParsedFestivalPlan } from './features/input/festivalPlanParser'
+import {
+  mergeParsedFestivalPlan,
+  normalizeFestivalPlan,
+} from './features/input/festivalPlanParser'
 import { navigate, useRoute } from './routing'
 
 const EMPTY_PLAN = {
@@ -25,11 +28,12 @@ const EMPTY_PLAN = {
   target: 0,
   eventType: 'new',
   firstHeldYear: null,
-  region: 'yeongwol',
+  sido: '강원',
+  sigungu: '영월군',
   venueType: 'outdoor',
   venue: '',
   venueLocation: null,
-  venueCapacity: '',
+  maxCapacity: null,
   start: '',
   end: '',
   programs: [],
@@ -110,9 +114,17 @@ export default function App() {
           return
         }
         if (stage !== 'report') {
-          setPlan(document.plan || { ...EMPTY_PLAN, planName: document.title, name: document.title, org: document.region })
+          const reportPlan = normalizeFestivalPlan(
+            document.plan || {
+              ...EMPTY_PLAN,
+              planName: document.title,
+              name: document.title,
+              org: document.region,
+            },
+          )
+          setPlan(reportPlan)
           setAutoFilledFields({})
-          setAnalysis(document.plan ? analyze(document.plan) : null)
+          setAnalysis(document.plan ? analyze(reportPlan) : null)
           setStage('report')
         }
         return
@@ -179,7 +191,7 @@ export default function App() {
         id,
         title: plan.planName || plan.name || '새 축제 기획안',
         fileName: sourceFileName || '직접 입력한 기획안',
-        region: plan.org || plan.region || '—',
+        region: plan.org || [plan.sido, plan.sigungu].filter(Boolean).join(' ') || '—',
         startDate: formatPlanDate(plan.start),
         uploadedAt: formatUploadedAt(),
         status: 'completed',
@@ -303,9 +315,10 @@ export default function App() {
           onParsedPlan={handleParsedPlan}
           onOpenReport={(document) => {
             setActiveDocument(document)
-            setPlan(document.plan || EMPTY_PLAN)
+            const reportPlan = normalizeFestivalPlan(document.plan || EMPTY_PLAN)
+            setPlan(reportPlan)
             setAutoFilledFields({})
-            setAnalysis(document.plan ? analyze(document.plan) : null)
+            setAnalysis(document.plan ? analyze(reportPlan) : null)
             setStage('report')
             navigate(`/reports/${encodeURIComponent(document.id)}`)
           }}
