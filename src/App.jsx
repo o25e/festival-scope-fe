@@ -137,6 +137,7 @@ export default function App() {
         stage={stage}
         onHome={home}
         isAuthenticated={isAuthenticated}
+        isPending={isPending}
         onLogin={openLogin}
         onSample={openSample}
         onLogout={handleLogout}

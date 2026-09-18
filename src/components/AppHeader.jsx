@@ -5,6 +5,7 @@ export function Header({
   stage,
   onHome,
   isAuthenticated,
+  isPending,
   onLogin,
   onSample,
   onLogout,
@@ -62,7 +63,7 @@ export function Header({
         <button className="btn btn-sm" type="button" onClick={onHome}>
           분석 시작
         </button>
-        <button className="btn btn-sm" type="button" onClick={onLogout}>
+        <button className="btn btn-sm" type="button" onClick={onLogout} disabled={isPending}>
           로그아웃
         </button>
         <span className="mockbadge">예시 데이터로 동작하는 프로토타입</span>
