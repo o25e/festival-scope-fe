@@ -772,6 +772,48 @@
   line-height: 0;
   vertical-align: -1px;
 }
+.documents-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.documents-upload-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -8px 0 18px;
+  padding: 11px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.documents-upload-status strong {
+  color: var(--ink);
+}
+.documents-upload-status span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.documents-upload-parsing {
+  border-color: #b9cde4;
+  background: #f4f8fd;
+}
+.documents-upload-success {
+  border-color: #b8dfcb;
+  background: #f3fbf6;
+}
+.documents-upload-error {
+  border-color: #e7c1bd;
+  background: #fff7f6;
+}
 .documents-summary {
   margin-bottom: 18px;
   padding: 16px 26px;

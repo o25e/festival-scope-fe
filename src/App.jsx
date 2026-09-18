@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { analyze, SAMPLE } from './data/prototype'
-import { createFestivalPlan, parseFestivalPlan } from './api/festivalPlans'
+import { createFestivalPlan } from './api/festivalPlans'
 import { Header } from './components/AppHeader'
 import { useAuth } from './auth/AuthProvider'
 import { LoginModal } from './features/auth/LoginModal'
@@ -71,14 +71,8 @@ export default function App() {
     [isRegisteringPlan, setIsRegisteringPlan] = useState(false),
     [registrationError, setRegistrationError] = useState(''),
     [festivalPlanResponse, setFestivalPlanResponse] = useState(null),
-    [pdfParseState, setPdfParseState] = useState({
-      status: 'idle',
-      fileName: '',
-      message: '',
-      error: '',
-    })
+    [sourceFileName, setSourceFileName] = useState('')
   const registrationInFlightRef = useRef(false)
-  const pdfParseInFlightRef = useRef(false)
   const A = useMemo(
       () => analysis || (stage === 'input' || stage === 'documents' ? null : analyze(plan)),
       [analysis, plan, stage],
@@ -151,7 +145,6 @@ export default function App() {
       setAnalysis(null)
       setRegistrationError('')
       setFestivalPlanResponse(null)
-      setPdfParseState({ status: 'idle', fileName: '', message: '', error: '' })
       navigate(isAuthenticated ? '/documents' : '/')
     },
     home = openDocuments,
@@ -164,7 +157,7 @@ export default function App() {
       setStep(1)
       setRegistrationError('')
       setFestivalPlanResponse(null)
-      setPdfParseState({ status: 'idle', fileName: '', message: '', error: '' })
+      setSourceFileName('')
       setStage('input')
       navigate('/plans/new')
     },
@@ -182,7 +175,7 @@ export default function App() {
       const document = {
         id,
         title: plan.planName || plan.name || '새 축제 기획안',
-        fileName: '직접 입력한 기획안',
+        fileName: sourceFileName || '직접 입력한 기획안',
         region: plan.org || plan.region || '—',
         startDate: formatPlanDate(plan.start),
         uploadedAt: formatUploadedAt(),
@@ -197,65 +190,19 @@ export default function App() {
       navigate(`/reports/${encodeURIComponent(id)}`)
     }
 
-  const handlePdfFileSelected = async (file) => {
-    if (pdfParseInFlightRef.current) return
+  const handleParsedPlan = ({ response, fileName }) => {
+    const parsed = mergeParsedFestivalPlan(EMPTY_PLAN, response)
+    if (!parsed.hasValues) return
 
-    if (!file) {
-      setPdfParseState({
-        status: 'error',
-        fileName: '',
-        message: '',
-        error: 'PDF 파일을 선택해 주세요.',
-      })
-      return
-    }
-
-    const isPdf =
-      file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '')
-    if (!isPdf) {
-      setPdfParseState({
-        status: 'error',
-        fileName: file.name || '',
-        message: '',
-        error: 'PDF 파일만 업로드할 수 있습니다.',
-      })
-      return
-    }
-
-    pdfParseInFlightRef.current = true
-    setPdfParseState({
-      status: 'parsing',
-      fileName: file.name || '',
-      message: '',
-      error: '',
-    })
-
-    try {
-      const response = await parseFestivalPlan(file)
-      if (!mergeParsedFestivalPlan({}, response).hasValues) {
-        throw new Error('PDF에서 입력할 수 있는 기획안 정보를 찾지 못했습니다.')
-      }
-
-      setPlan((currentPlan) => mergeParsedFestivalPlan(currentPlan, response).plan)
-      setPdfParseState({
-        status: 'success',
-        fileName: file.name || '',
-        message:
-          '파싱된 값이 입력 폼에 반영되었습니다. 필요한 항목은 직접 수정할 수 있습니다.',
-        error: '',
-      })
-    } catch (error) {
-      setPdfParseState({
-        status: 'error',
-        fileName: file.name || '',
-        message: '',
-        error:
-          error?.message ||
-          'PDF 기획안 파싱에 실패했습니다. 잠시 후 다시 시도해 주세요.',
-      })
-    } finally {
-      pdfParseInFlightRef.current = false
-    }
+    setPlan(parsed.plan)
+    setSourceFileName(fileName || '')
+    setActiveDocument(null)
+    setAnalysis(null)
+    setStep(1)
+    setRegistrationError('')
+    setFestivalPlanResponse(null)
+    setStage('input')
+    navigate('/plans/new')
   }
 
   const handleAnalyze = async () => {
@@ -348,7 +295,7 @@ export default function App() {
       {stage === 'documents' && (
         <DocumentsPage
           onDocumentsLoaded={handleDocumentsLoaded}
-          onNew={startNewPlan}
+          onParsedPlan={handleParsedPlan}
           onOpenReport={(document) => {
             setActiveDocument(document)
             setPlan(document.plan || EMPTY_PLAN)
@@ -364,8 +311,6 @@ export default function App() {
           setPlan={setPlan}
           step={step}
           setStep={setStep}
-          pdfParseState={pdfParseState}
-          onPdfFileSelected={handlePdfFileSelected}
           onReview={(p) => {
             setPlan(p)
             setRegistrationError('')

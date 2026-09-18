@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { getAnalysisDocuments } from '../../api/analyses'
+import { parseFestivalPlan } from '../../api/festivalPlans'
+import { mergeParsedFestivalPlan } from '../input/festivalPlanParser'
 import { DOCUMENT_STATUS, mapAnalysisDocument } from './documentsData'
 
 const PAGE_SIZE = 10
@@ -7,10 +9,18 @@ const PAGE_SIZE = 10
 const isAbortError = (error) =>
   error?.name === 'AbortError' || error?.cause?.name === 'AbortError'
 
-export function DocumentsPage({ onNew, onOpenReport, onDocumentsLoaded }) {
+export function DocumentsPage({ onParsedPlan, onOpenReport, onDocumentsLoaded }) {
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(0)
   const [retryToken, setRetryToken] = useState(0)
+  const [uploadState, setUploadState] = useState({
+    status: 'idle',
+    fileName: '',
+    error: '',
+  })
+  const fileInputRef = useRef(null)
+  const parseControllerRef = useRef(null)
+  const parseInFlightRef = useRef(false)
   const [state, setState] = useState({
     status: 'loading',
     documents: [],
@@ -58,6 +68,64 @@ export function DocumentsPage({ onNew, onOpenReport, onDocumentsLoaded }) {
       controller.abort()
     }
   }, [onDocumentsLoaded, page, retryToken])
+
+  useEffect(() => () => parseControllerRef.current?.abort(), [])
+
+  const openFilePicker = () => {
+    if (parseInFlightRef.current) return
+    if (fileInputRef.current) fileInputRef.current.value = ''
+    fileInputRef.current?.click()
+  }
+
+  const handleFileSelected = async (event) => {
+    const file = event.target.files?.[0] || null
+    event.target.value = ''
+
+    if (!file || parseInFlightRef.current) return
+
+    const isPdf =
+      file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '')
+    if (!isPdf) {
+      setUploadState({
+        status: 'error',
+        fileName: file.name || '',
+        error: 'PDF 파일만 업로드할 수 있습니다.',
+      })
+      return
+    }
+
+    parseInFlightRef.current = true
+    const controller = new AbortController()
+    parseControllerRef.current = controller
+    setUploadState({ status: 'parsing', fileName: file.name || '', error: '' })
+
+    try {
+      const response = await parseFestivalPlan(file, { signal: controller.signal })
+      const parsed = mergeParsedFestivalPlan({}, response)
+      if (!parsed.hasValues) {
+        throw new Error('PDF에서 입력할 축제 기획안 정보를 찾지 못했습니다.')
+      }
+
+      setUploadState({
+        status: 'success',
+        fileName: file.name || '',
+        error: '',
+      })
+      onParsedPlan?.({ response, fileName: file.name || '' })
+    } catch (error) {
+      if (isAbortError(error)) return
+      setUploadState({
+        status: 'error',
+        fileName: file.name || '',
+        error:
+          error?.message ||
+          'PDF 기획안 분석에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+      })
+    } finally {
+      parseInFlightRef.current = false
+      parseControllerRef.current = null
+    }
+  }
 
   const filteredDocuments = useMemo(() => {
     const normalized = query.trim().toLowerCase()
@@ -136,10 +204,41 @@ export function DocumentsPage({ onNew, onOpenReport, onDocumentsLoaded }) {
             <h1>분석 문서 목록</h1>
             <p>업로드한 축제 기획안의 검증 결과를 확인하세요.</p>
           </div>
-          <button className="btn btn-primary documents-primary" type="button" onClick={onNew}>
+          <button
+            className="btn btn-primary documents-primary"
+            type="button"
+            onClick={openFilePicker}
+            disabled={uploadState.status === 'parsing'}
+          >
             <span aria-hidden="true">+</span> 새 기획안 업로드
           </button>
+          <input
+            ref={fileInputRef}
+            className="documents-file-input"
+            type="file"
+            accept="application/pdf,.pdf"
+            onChange={handleFileSelected}
+            aria-label="PDF 축제 기획안 파일 선택"
+          />
         </div>
+
+        {uploadState.status !== 'idle' && (
+          <div
+            className={`documents-upload-status documents-upload-${uploadState.status}`}
+            role={uploadState.status === 'error' ? 'alert' : 'status'}
+            aria-live="polite"
+          >
+            <strong>
+              {uploadState.status === 'parsing'
+                ? 'PDF 기획안을 분석하고 있습니다.'
+                : uploadState.status === 'success'
+                  ? 'PDF 분석이 완료되었습니다.'
+                  : 'PDF 분석에 실패했습니다.'}
+            </strong>
+            {uploadState.fileName && <span>{uploadState.fileName}</span>}
+            {uploadState.status === 'error' && <span>{uploadState.error}</span>}
+          </div>
+        )}
 
         <section className="formcard documents-summary" aria-label="분석 문서 요약">
           <div><span>총 분석 문서</span> <strong>{state.totalElements}</strong></div>
