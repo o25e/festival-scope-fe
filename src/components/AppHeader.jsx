@@ -9,6 +9,8 @@ export function Header({
   onLogin,
   onSample,
   onLogout,
+  onDocuments,
+  onNew,
 }) {
   if (!isAuthenticated) {
     return (
@@ -27,6 +29,28 @@ export function Header({
               로그인
             </button>
           </div>
+        </div>
+      </header>
+    )
+  }
+
+  if (stage === 'documents') {
+    return (
+      <header className="topbar documents-topbar">
+        <div
+          className="brand"
+          onClick={onDocuments}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onDocuments()}
+          role="button"
+          tabIndex="0"
+          aria-label="FestivalScope 처음으로"
+        >
+          Festival<span>Scope</span>
+          <em>축제 흥행 사전 검증</em>
+        </div>
+        <div className="topbar-right documents-topbar-actions">
+          <button className="btn btn-sm" type="button" onClick={onDocuments}>분석 문서 목록</button>
+          <button className="btn btn-sm" type="button" onClick={onLogout} disabled={isPending}>로그아웃</button>
         </div>
       </header>
     )
@@ -60,8 +84,8 @@ export function Header({
         ))}
       </nav>
       <div className="topbar-right">
-        <button className="btn btn-sm" type="button" onClick={onHome}>
-          분석 시작
+        <button className="btn btn-sm" type="button" onClick={onDocuments}>
+          분석 문서 목록
         </button>
         <button className="btn btn-sm" type="button" onClick={onLogout} disabled={isPending}>
           로그아웃

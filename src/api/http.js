@@ -204,6 +204,7 @@ export async function request(
       signal,
     })
   } catch (error) {
+    if (error?.name === 'AbortError') throw error
     throw new ApiError('네트워크 오류가 발생했습니다.', { cause: error })
   }
 
