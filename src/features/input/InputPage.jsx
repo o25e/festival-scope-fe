@@ -23,25 +23,7 @@ export function FormScreen({
 }) {
   const [errors, setErrors] = useState([])
   const venueLocationStatus = useVenueLocationSearch({ plan, setPlan })
-  const clearAutoFilled = (...fields) => {
-    if (!setAutoFilledFields) return
-    setAutoFilledFields((current) => {
-      const next = { ...current }
-      let changed = false
-      fields.forEach((field) => {
-        if (next[field]) {
-          delete next[field]
-          changed = true
-        }
-      })
-      return changed ? next : current
-    })
-  }
-  const update = (k, v) => {
-    setPlan((p) => ({ ...p, [k]: v }))
-    clearAutoFilled(k)
-    if (k === 'region') clearAutoFilled('org')
-  }
+  const update = (k, v) => setPlan((p) => ({ ...p, [k]: v }))
   const showVenueCapacityWarning = !String(plan.venueCapacity ?? '').trim()
   const pairs = plan.festivalThemes?.length
     ? plan.festivalThemes
@@ -52,8 +34,12 @@ export function FormScreen({
       eventType,
       firstHeldYear: eventType === 'new' ? null : p.firstHeldYear,
     }))
-    clearAutoFilled('eventType')
-    if (eventType === 'new') clearAutoFilled('firstHeldYear')
+    if (eventType === 'new') setAutoFilledFields?.((current) => {
+      if (!current.firstHeldYear) return current
+      const next = { ...current }
+      delete next.firstHeldYear
+      return next
+    })
   }
   const updatePair = (index, key, value) => {
     setPlan((p) => ({
@@ -75,7 +61,6 @@ export function FormScreen({
         }
       }),
     }))
-    clearAutoFilled('festivalThemes')
   }
   const addPair = () => {
     setPlan((p) =>
@@ -86,7 +71,6 @@ export function FormScreen({
           }
         : p,
     )
-    clearAutoFilled('festivalThemes')
   }
   const removePair = (index) => {
     setPlan((p) =>
@@ -97,7 +81,6 @@ export function FormScreen({
           }
         : p,
     )
-    clearAutoFilled('festivalThemes')
   }
 
   const fillSample = () => {
