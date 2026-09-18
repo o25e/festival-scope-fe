@@ -74,7 +74,7 @@ export function ReviewScreen({
       </>,
     ],
     [
-      '최대 수용 인원',
+      '행사장 수용 규모',
       plan.maxCapacity === null || plan.maxCapacity === '' || plan.maxCapacity === undefined
         ? '미정'
         : `${fmt(plan.maxCapacity)}명`,

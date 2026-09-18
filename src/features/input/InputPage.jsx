@@ -446,9 +446,9 @@ export function FormScreen({
               </Input>
               <Input
                 full
-                label="최대 수용 인원"
+                label="행사장 수용 규모"
                 auto={autoFilledFields.maxCapacity}
-                hint="명 단위 · 선택 입력"
+                hint="최대 수용 인원 기준"
                 error={errors.includes('최대 수용 인원')}
               >
                 <input
@@ -467,7 +467,7 @@ export function FormScreen({
                 {showCapacityWarning && (
                   <div className="capacity-warnings">
                     <WarningNotice>
-                      기획안에서 최대 수용 인원이 확인되지 않았습니다.
+                      기획안에서 행사장 수용 규모가 확인되지 않았습니다.
                       <br />
                       예상 최대 인원을 숫자로 입력해주세요. 모르면 비워둘 수 있습니다.
                     </WarningNotice>
