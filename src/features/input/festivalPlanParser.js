@@ -23,6 +23,21 @@ const nonEmptyText = (value) => {
   return text || null
 }
 
+const REGION_SIDO_ALIASES = {
+  강원도: '강원',
+  강원특별자치도: '강원',
+  전라남도: '전남',
+  경상북도: '경북',
+  충청남도: '충남',
+}
+
+const normalizeRegionName = (value) => {
+  const [sido, ...sigunguParts] = normalize(value).split(' ')
+  return [REGION_SIDO_ALIASES[sido] || sido, ...sigunguParts]
+    .filter(Boolean)
+    .join(' ')
+}
+
 const finiteNumber = (value) => {
   if (value === null || value === undefined || value === '') return null
   const number = Number(value)
@@ -30,14 +45,32 @@ const finiteNumber = (value) => {
 }
 
 const getRegionKey = (sido, sigungu) => {
-  const parsedRegion = [sido, sigungu].map(normalize).filter(Boolean).join(' ')
+  const parsedRegion = normalize(
+    sigungu === undefined ? sido : [sido, sigungu].filter(Boolean).join(' '),
+  )
   if (!parsedRegion) return null
+
+  if (Object.prototype.hasOwnProperty.call(REGIONS, parsedRegion)) {
+    return parsedRegion
+  }
 
   return (
     Object.entries(REGIONS).find(
-      ([, region]) => normalize(region.name) === parsedRegion,
+      ([, region]) => normalizeRegionName(region.name) === normalizeRegionName(parsedRegion),
     )?.[0] || null
   )
+}
+
+const getParsedRegionName = (parsed) => {
+  const regionValue =
+    parsed.region && typeof parsed.region === 'object' ? parsed.region : {}
+  const sido = parsed.sido ?? parsed.province ?? regionValue.sido
+  const sigungu =
+    parsed.sigungu ?? parsed.cityCounty ?? parsed.county ?? regionValue.sigungu
+  const sidoAndSigungu = [sido, sigungu].map(normalize).filter(Boolean).join(' ')
+  if (sidoAndSigungu) return sidoAndSigungu
+
+  return nonEmptyText(parsed.regionName) || nonEmptyText(parsed.region)
 }
 
 const getThemePair = (code) => {
@@ -141,8 +174,17 @@ export function mergeParsedFestivalPlan(plan, response) {
   const venueType = VENUE_TYPE_BY_API_VALUE[normalize(parsed.venueType)]
   if (venueType) patch.venueType = venueType
 
-  const region = getRegionKey(parsed.sido, parsed.sigungu)
+  const parsedRegionName = getParsedRegionName(parsed)
+  const region = getRegionKey(parsedRegionName)
   if (region) patch.region = region
+  if (parsedRegionName) {
+    patch.org =
+      parsedRegionName && !Object.prototype.hasOwnProperty.call(REGIONS, parsedRegionName)
+        ? parsedRegionName
+        : region
+          ? REGIONS[region].name
+          : parsedRegionName
+  }
 
   const themePairs = Array.isArray(parsed.themes)
     ? parsed.themes.map((theme) => getThemePair(theme?.code)).filter(Boolean)
@@ -159,6 +201,9 @@ export function mergeParsedFestivalPlan(plan, response) {
     plan: { ...plan, ...patch },
     hasValues: Object.keys(patch).length > 0,
     appliedFields: Object.keys(patch),
+    autoFilledFields: Object.fromEntries(
+      Object.keys(patch).map((field) => [field, true]),
+    ),
   }
 }
 

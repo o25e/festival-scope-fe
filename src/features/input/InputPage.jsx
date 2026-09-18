@@ -4,7 +4,6 @@ import {
   getFestivalTopics,
   PROGRAMS,
   REGIONS,
-  SAMPLE,
 } from '../../data/prototype'
 import { Button, Input, WarningNotice } from '../../components/ui'
 import {
@@ -18,6 +17,8 @@ export function FormScreen({
   step,
   setStep,
   onReview,
+  autoFilledFields = {},
+  setAutoFilledFields,
 }) {
   const [errors, setErrors] = useState([])
   const venueLocationStatus = useVenueLocationSearch({ plan, setPlan })
@@ -26,13 +27,20 @@ export function FormScreen({
   const pairs = plan.festivalThemes?.length
     ? plan.festivalThemes
     : [{ type: '', topic: '' }]
-  const updateEventType = (eventType) =>
+  const updateEventType = (eventType) => {
     setPlan((p) => ({
       ...p,
       eventType,
       firstHeldYear: eventType === 'new' ? null : p.firstHeldYear,
     }))
-  const updatePair = (index, key, value) =>
+    if (eventType === 'new') setAutoFilledFields?.((current) => {
+      if (!current.firstHeldYear) return current
+      const next = { ...current }
+      delete next.firstHeldYear
+      return next
+    })
+  }
+  const updatePair = (index, key, value) => {
     setPlan((p) => ({
       ...p,
       festivalThemes: (p.festivalThemes?.length
@@ -52,7 +60,8 @@ export function FormScreen({
         }
       }),
     }))
-  const addPair = () =>
+  }
+  const addPair = () => {
     setPlan((p) =>
       p.festivalThemes.length < 2
         ? {
@@ -61,7 +70,8 @@ export function FormScreen({
           }
         : p,
     )
-  const removePair = (index) =>
+  }
+  const removePair = (index) => {
     setPlan((p) =>
       p.festivalThemes.length > 1
         ? {
@@ -70,19 +80,18 @@ export function FormScreen({
           }
         : p,
     )
+  }
 
-  const fillSample = () =>
-    setPlan({
-      ...SAMPLE,
-      target: Number(SAMPLE.target),
-      festivalThemes: SAMPLE.festivalThemes.map((pair) => ({ ...pair })),
-    })
   const validate = () => {
     const e = []
     if (step >= 1 && !String(plan.planName ?? '').trim()) e.push('기획안명')
-    if (step >= 1 && !plan.name.trim()) e.push('축제명')
+    if (step >= 1 && !String(plan.name ?? '').trim()) e.push('축제명')
+    if (step >= 1 && !String(plan.org ?? '').trim()) e.push('주최 기관')
     if (step >= 1 && !plan.target) e.push('목표 방문객')
-    if (step >= 1 && pairs.some((pair) => !pair.type || !pair.topic.trim()))
+    if (
+      step >= 1 &&
+      pairs.some((pair) => !pair.type || !String(pair.topic ?? '').trim())
+    )
       e.push('축제 유형 및 주제')
     if (
       step >= 1 &&
@@ -150,7 +159,7 @@ export function FormScreen({
               <Input
                 full
                 label="기획안명"
-                required
+                auto={autoFilledFields.planName}
                 error={errors.includes('기획안명')}
               >
                 <input
@@ -163,7 +172,7 @@ export function FormScreen({
               <Input
                 full
                 label="축제명"
-                required
+                auto={autoFilledFields.name}
                 error={errors.includes('축제명')}
               >
                 <input
@@ -173,7 +182,11 @@ export function FormScreen({
                   placeholder="예: 영월 가을별빛 야행축제"
                 />
               </Input>
-              <Input label="주최 기관">
+              <Input
+                label="주최 기관"
+                auto={autoFilledFields.org}
+                error={errors.includes('주최 기관')}
+              >
                 <input
                   type="text"
                   value={plan.org}
@@ -183,7 +196,7 @@ export function FormScreen({
               </Input>
               <Input
                 label="개최 형태"
-                required
+                auto={autoFilledFields.eventType}
                 error={errors.includes('최초 개최 이력(4자리 연도)')}
               >
                 <div className="event-type-and-history">
@@ -215,7 +228,12 @@ export function FormScreen({
                   </div>
                   {plan.eventType === 'existing' && (
                     <div className="event-history-inline">
-                      <label htmlFor="firstHeldYear">최초 개최 이력</label>
+                      <label htmlFor="firstHeldYear">
+                        최초 개최 이력{' '}
+                        {autoFilledFields.firstHeldYear && (
+                          <span className="auto">AUTO</span>
+                        )}
+                      </label>
                       <input
                         id="firstHeldYear"
                         type="number"
@@ -238,8 +256,9 @@ export function FormScreen({
               <Input
                 full
                 label="축제 유형 및 주제"
-                required
+                auto={autoFilledFields.festivalThemes}
                 hint="트렌드 핏 분석 기준"
+                error={errors.includes('축제 유형 및 주제')}
               >
                 <div className="theme-pairs">
                   {pairs.map((pair, index) => (
@@ -310,7 +329,7 @@ export function FormScreen({
               </Input>
               <Input
                 label="목표 방문객"
-                required
+                auto={autoFilledFields.target}
                 hint="전체 기간 누적"
                 error={errors.includes('목표 방문객')}
               >
@@ -327,7 +346,7 @@ export function FormScreen({
           )}
           {step === 2 && (
             <div className="fieldgrid event-place-grid">
-              <Input label="개최 지역" required>
+              <Input label="개최 지역" auto={autoFilledFields.region}>
                 <select
                   value={plan.region}
                   onChange={(e) => update('region', e.target.value)}
@@ -339,7 +358,7 @@ export function FormScreen({
                   ))}
                 </select>
               </Input>
-              <Input label="행사장 유형">
+              <Input label="행사장 유형" auto={autoFilledFields.venueType}>
                 <select
                   value={plan.venueType}
                   onChange={(e) => update('venueType', e.target.value)}
@@ -352,7 +371,7 @@ export function FormScreen({
               <Input
                 full
                 label="행사장명"
-                required
+                auto={autoFilledFields.venue}
                 error={errors.includes('행사장명')}
               >
                 <input
@@ -362,7 +381,12 @@ export function FormScreen({
                   placeholder="예: 동강둔치공원"
                 />
               </Input>
-              <Input full label="행사장 수용 규모" hint="최대 수용 인원 기준">
+              <Input
+                full
+                label="행사장 수용 규모"
+                auto={autoFilledFields.venueCapacity}
+                hint="최대 수용 인원 기준"
+              >
                 <input
                   type="text"
                   value={plan.venueCapacity || ''}
@@ -394,7 +418,7 @@ export function FormScreen({
               />
               <Input
                 label="개최 시작일"
-                required
+                auto={autoFilledFields.start}
                 error={errors.includes('개최 시작일')}
               >
                 <input
@@ -405,7 +429,7 @@ export function FormScreen({
               </Input>
               <Input
                 label="개최 종료일"
-                required
+                auto={autoFilledFields.end}
                 error={errors.includes('개최 종료일')}
               >
                 <input
@@ -421,7 +445,7 @@ export function FormScreen({
               <Input
                 full
                 label="프로그램 구성"
-                required
+                auto={autoFilledFields.programs}
                 hint="하나 이상 선택"
                 error={errors.includes('프로그램 구성')}
               >
@@ -451,16 +475,6 @@ export function FormScreen({
               이전
             </Button>
             <span className="spacer" />
-            <Button
-              ghost
-              small
-              onClick={() => {
-                fillSample()
-                setErrors([])
-              }}
-            >
-              예시 기획안 채우기
-            </Button>
             <Button primary onClick={next}>
               {step === 3 ? '입력 확인' : '다음'}
             </Button>
