@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 import {
@@ -35,6 +36,7 @@ const emptySession = {
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(getAuthSession)
   const [pendingAction, setPendingAction] = useState(null)
+  const logoutPromiseRef = useRef(null)
 
   useEffect(() => {
     const syncSession = (event) => {
@@ -72,18 +74,45 @@ export function AuthProvider({ children }) {
   }, [])
 
   const handleLogout = useCallback(async (options) => {
-    const refreshToken = getRefreshToken()
-    if (!refreshToken) return null
+    if (logoutPromiseRef.current) return logoutPromiseRef.current
 
-    setPendingAction('logout')
-    try {
-      const response = await logoutRequest(refreshToken, options)
+    const refreshToken = getRefreshToken()
+    if (!refreshToken) {
       clearAuthSession()
       setSession(emptySession)
-      return response
-    } finally {
-      setPendingAction(null)
+      return null
     }
+
+    setPendingAction('logout')
+    logoutPromiseRef.current = (async () => {
+      try {
+        const response = await logoutRequest(refreshToken, options)
+        clearAuthSession()
+        setSession(emptySession)
+        return response
+      } catch (error) {
+        const errorCode =
+          error?.data?.errorCode ||
+          error?.data?.code ||
+          error?.data?.error?.errorCode ||
+          error?.data?.error?.code
+
+        // The server no longer has this refresh token. The client is already
+        // logged out from the user's perspective, so discard the stale session.
+        if (error?.status === 401 && errorCode === 'AUTH_004') {
+          clearAuthSession()
+          setSession(emptySession)
+          return null
+        }
+
+        throw error
+      } finally {
+        setPendingAction(null)
+        logoutPromiseRef.current = null
+      }
+    })()
+
+    return logoutPromiseRef.current
   }, [])
 
   const handleReissue = useCallback(async (options) => {
