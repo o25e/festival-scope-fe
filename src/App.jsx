@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { analyze, SAMPLE } from './data/prototype'
-import { createFestivalPlan, parseFestivalPlan } from './api/festivalPlans'
+import { createFestivalPlan } from './api/festivalPlans'
 import { Header } from './components/AppHeader'
 import { useAuth } from './auth/AuthProvider'
 import { LoginModal } from './features/auth/LoginModal'
@@ -12,48 +12,69 @@ import { ITEMS } from './features/analysis/analysisData'
 import { ResultScreen } from './features/analysis/ResultsPage'
 import { Panel } from './features/analysis/DetailPanel'
 import { ReportScreen } from './features/report/ReportPage'
+import { DocumentsPage } from './features/documents/DocumentsPage'
 import { buildFestivalPlanPayload } from './features/input/festivalPlanPayload'
 import { mergeParsedFestivalPlan } from './features/input/festivalPlanParser'
+import { navigate, useRoute } from './routing'
+
+const EMPTY_PLAN = {
+  planName: '',
+  name: '',
+  org: '',
+  festivalThemes: [{ type: '', topic: '' }],
+  target: 0,
+  eventType: 'new',
+  firstHeldYear: null,
+  region: 'yeongwol',
+  venueType: 'outdoor',
+  venue: '',
+  venueLocation: null,
+  venueCapacity: '',
+  start: '',
+  end: '',
+  programs: [],
+}
+
+const getResponseId = (value) => {
+  if (!value || typeof value !== 'object') return null
+  for (const key of ['planId', 'festivalPlanId', 'id']) {
+    if (typeof value[key] === 'string' || typeof value[key] === 'number') return String(value[key])
+  }
+  for (const child of Object.values(value)) {
+    const found = getResponseId(child)
+    if (found) return found
+  }
+  return null
+}
+
+const formatPlanDate = (value) => value ? value.replaceAll('-', '.') : '—'
+const formatUploadedAt = (value = new Date()) => {
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+  return `${month}.${day}`
+}
 
 export default function App() {
   const { isAuthenticated, isPending, login, signup, logout } = useAuth()
-  const [stage, setStage] = useState(isAuthenticated ? 'input' : 'landing'),
+  const route = useRoute()
+  const initialStage = route.name === 'documents' ? 'documents' : route.name === 'input' ? 'input' : route.name === 'report' ? 'report' : isAuthenticated ? 'documents' : 'landing'
+  const [stage, setStage] = useState(initialStage),
     [loginOpen, setLoginOpen] = useState(false),
     [loginError, setLoginError] = useState(''),
     [isSample, setIsSample] = useState(false),
     [step, setStep] = useState(1),
-    [plan, setPlan] = useState({
-      planName: '',
-      name: '',
-      org: '',
-      festivalThemes: [{ type: '', topic: '' }],
-      target: 0,
-      eventType: 'new',
-      firstHeldYear: null,
-      region: 'yeongwol',
-      venueType: 'outdoor',
-      venue: '',
-      venueLocation: null,
-      venueCapacity: '',
-      start: '',
-      end: '',
-      programs: [],
-    }),
+    [plan, setPlan] = useState(EMPTY_PLAN),
+    [documents, setDocuments] = useState([]),
+    [activeDocument, setActiveDocument] = useState(null),
     [analysis, setAnalysis] = useState(null),
     [openKey, setOpenKey] = useState(null),
     [isRegisteringPlan, setIsRegisteringPlan] = useState(false),
     [registrationError, setRegistrationError] = useState(''),
     [festivalPlanResponse, setFestivalPlanResponse] = useState(null),
-    [pdfParseState, setPdfParseState] = useState({
-      status: 'idle',
-      fileName: '',
-      message: '',
-      error: '',
-    })
+    [sourceFileName, setSourceFileName] = useState('')
   const registrationInFlightRef = useRef(false)
-  const pdfParseInFlightRef = useRef(false)
   const A = useMemo(
-      () => analysis || (stage === 'input' ? null : analyze(plan)),
+      () => analysis || (stage === 'input' || stage === 'documents' ? null : analyze(plan)),
       [analysis, plan, stage],
     ),
     index = ITEMS.findIndex((x) => x.key === openKey),
@@ -63,13 +84,45 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'instant' })
   }, [stage, step])
 
+  const handleDocumentsLoaded = useCallback((nextDocuments) => {
+    setDocuments(nextDocuments)
+  }, [])
+
   useEffect(() => {
     if (isAuthenticated) {
-      if (stage === 'landing' && !isSample) setStage('input')
+      if (isSample) return
+      if (route.name === 'documents') {
+        if (stage !== 'documents') setStage('documents')
+        return
+      }
+      if (route.name === 'input') {
+        if (stage === 'landing' || stage === 'documents') setStage('input')
+        return
+      }
+      if (route.name === 'report') {
+        const document =
+          activeDocument?.id === route.planId
+            ? activeDocument
+            : documents.find((item) => item.id === route.planId)
+        if (!document) {
+          navigate('/documents', { replace: true })
+          return
+        }
+        if (stage !== 'report') {
+          setPlan(document.plan || { ...EMPTY_PLAN, planName: document.title, name: document.title, org: document.region })
+          setAnalysis(document.plan ? analyze(document.plan) : null)
+          setStage('report')
+        }
+        return
+      }
+      navigate('/documents', { replace: true })
       return
     }
-    if (!isSample && stage !== 'landing' && stage !== 'report') setStage('landing')
-  }, [isAuthenticated, isSample, stage])
+    if (!isSample) {
+      if (route.name !== 'landing') navigate('/', { replace: true })
+      if (stage !== 'landing') setStage('landing')
+    }
+  }, [activeDocument, documents, isAuthenticated, isSample, route.name, route.planId, stage])
 
   useEffect(() => {
     const f = (e) => {
@@ -83,15 +136,30 @@ export default function App() {
     return () => window.removeEventListener('keydown', f)
   }, [index])
 
-  const home = () => {
+  const openDocuments = () => {
       setOpenKey(null)
       setIsSample(false)
-      setStage(isAuthenticated ? 'input' : 'landing')
+      setActiveDocument(null)
+      setStage(isAuthenticated ? 'documents' : 'landing')
       setStep(1)
       setAnalysis(null)
       setRegistrationError('')
       setFestivalPlanResponse(null)
-      setPdfParseState({ status: 'idle', fileName: '', message: '', error: '' })
+      navigate(isAuthenticated ? '/documents' : '/')
+    },
+    home = openDocuments,
+    startNewPlan = () => {
+      setOpenKey(null)
+      setIsSample(false)
+      setActiveDocument(null)
+      setPlan(EMPTY_PLAN)
+      setAnalysis(null)
+      setStep(1)
+      setRegistrationError('')
+      setFestivalPlanResponse(null)
+      setSourceFileName('')
+      setStage('input')
+      navigate('/plans/new')
     },
     goEdit = () => {
       setOpenKey(null)
@@ -99,71 +167,42 @@ export default function App() {
       setRegistrationError('')
       setFestivalPlanResponse(null)
       setStage('input')
+      navigate('/plans/new')
     },
     finish = () => {
-      setAnalysis(analyze(plan))
-      setStage('result')
-    }
-
-  const handlePdfFileSelected = async (file) => {
-    if (pdfParseInFlightRef.current) return
-
-    if (!file) {
-      setPdfParseState({
-        status: 'error',
-        fileName: '',
-        message: '',
-        error: 'PDF 파일을 선택해 주세요.',
-      })
-      return
-    }
-
-    const isPdf =
-      file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '')
-    if (!isPdf) {
-      setPdfParseState({
-        status: 'error',
-        fileName: file.name || '',
-        message: '',
-        error: 'PDF 파일만 업로드할 수 있습니다.',
-      })
-      return
-    }
-
-    pdfParseInFlightRef.current = true
-    setPdfParseState({
-      status: 'parsing',
-      fileName: file.name || '',
-      message: '',
-      error: '',
-    })
-
-    try {
-      const response = await parseFestivalPlan(file)
-      if (!mergeParsedFestivalPlan({}, response).hasValues) {
-        throw new Error('PDF에서 입력할 수 있는 기획안 정보를 찾지 못했습니다.')
+      const nextAnalysis = analyze(plan)
+      const id = getResponseId(festivalPlanResponse) || `local-${Date.now()}`
+      const document = {
+        id,
+        title: plan.planName || plan.name || '새 축제 기획안',
+        fileName: sourceFileName || '직접 입력한 기획안',
+        region: plan.org || plan.region || '—',
+        startDate: formatPlanDate(plan.start),
+        uploadedAt: formatUploadedAt(),
+        status: 'completed',
+        score: nextAnalysis.composite,
+        recommendations: 0,
+        plan,
       }
-
-      setPlan((currentPlan) => mergeParsedFestivalPlan(currentPlan, response).plan)
-      setPdfParseState({
-        status: 'success',
-        fileName: file.name || '',
-        message:
-          '파싱된 값이 입력 폼에 반영되었습니다. 필요한 항목은 직접 수정할 수 있습니다.',
-        error: '',
-      })
-    } catch (error) {
-      setPdfParseState({
-        status: 'error',
-        fileName: file.name || '',
-        message: '',
-        error:
-          error?.message ||
-          'PDF 기획안 파싱에 실패했습니다. 잠시 후 다시 시도해 주세요.',
-      })
-    } finally {
-      pdfParseInFlightRef.current = false
+      setActiveDocument(document)
+      setAnalysis(nextAnalysis)
+      setStage('result')
+      navigate(`/reports/${encodeURIComponent(id)}`)
     }
+
+  const handleParsedPlan = ({ response, fileName }) => {
+    const parsed = mergeParsedFestivalPlan(EMPTY_PLAN, response)
+    if (!parsed.hasValues) return
+
+    setPlan(parsed.plan)
+    setSourceFileName(fileName || '')
+    setActiveDocument(null)
+    setAnalysis(null)
+    setStep(1)
+    setRegistrationError('')
+    setFestivalPlanResponse(null)
+    setStage('input')
+    navigate('/plans/new')
   }
 
   const handleAnalyze = async () => {
@@ -202,7 +241,8 @@ export default function App() {
       await login(credentials)
       setIsSample(false)
       setLoginOpen(false)
-      setStage('input')
+      setStage('documents')
+      navigate('/documents')
     } catch (error) {
       setLoginError(error?.message || '로그인에 실패했습니다. 입력 정보를 확인해주세요.')
     }
@@ -232,6 +272,7 @@ export default function App() {
       setStage('landing')
       setStep(1)
       setAnalysis(null)
+      navigate('/')
     } catch {
       // AuthProvider keeps the session when logout fails; the service remains usable.
     }
@@ -241,7 +282,9 @@ export default function App() {
     <>
       <Header
         stage={stage}
-        onHome={home}
+        onHome={openDocuments}
+        onDocuments={openDocuments}
+        onNew={startNewPlan}
         isAuthenticated={isAuthenticated}
         isPending={isPending}
         onLogin={openLogin}
@@ -249,14 +292,25 @@ export default function App() {
         onLogout={handleLogout}
       />
       {stage === 'landing' && <LandingPage onStart={openLogin} onSample={openSample} />}
+      {stage === 'documents' && (
+        <DocumentsPage
+          onDocumentsLoaded={handleDocumentsLoaded}
+          onParsedPlan={handleParsedPlan}
+          onOpenReport={(document) => {
+            setActiveDocument(document)
+            setPlan(document.plan || EMPTY_PLAN)
+            setAnalysis(document.plan ? analyze(document.plan) : null)
+            setStage('report')
+            navigate(`/reports/${encodeURIComponent(document.id)}`)
+          }}
+        />
+      )}
       {stage === 'input' && (
         <FormScreen
           plan={plan}
           setPlan={setPlan}
           step={step}
           setStep={setStep}
-          pdfParseState={pdfParseState}
-          onPdfFileSelected={handlePdfFileSelected}
           onReview={(p) => {
             setPlan(p)
             setRegistrationError('')

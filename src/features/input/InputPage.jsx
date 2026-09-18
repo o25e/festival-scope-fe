@@ -18,8 +18,6 @@ export function FormScreen({
   step,
   setStep,
   onReview,
-  pdfParseState,
-  onPdfFileSelected,
 }) {
   const [errors, setErrors] = useState([])
   const venueLocationStatus = useVenueLocationSearch({ plan, setPlan })
@@ -149,41 +147,6 @@ export function FormScreen({
           )}
           {step === 1 && (
             <div className="fieldgrid">
-              <Input
-                full
-                label="PDF 기획안 자동 입력"
-                hint="PDF 파일을 올리면 파싱된 값만 현재 입력값에 반영됩니다"
-              >
-                <input
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  disabled={pdfParseState?.status === 'parsing'}
-                  onChange={(event) => {
-                    onPdfFileSelected?.(event.target.files?.[0] || null)
-                    event.target.value = ''
-                  }}
-                />
-                {pdfParseState?.fileName && (
-                  <p className="field-note" role="status">
-                    선택 파일: {pdfParseState.fileName}
-                  </p>
-                )}
-                {pdfParseState?.status === 'parsing' && (
-                  <p className="field-note" role="status" aria-live="polite">
-                    PDF 기획안을 파싱하고 있습니다…
-                  </p>
-                )}
-                {pdfParseState?.status === 'success' && (
-                  <p className="field-note" role="status" aria-live="polite">
-                    {pdfParseState.message}
-                  </p>
-                )}
-                {pdfParseState?.status === 'error' && (
-                  <p className="field-note" role="alert">
-                    {pdfParseState.error}
-                  </p>
-                )}
-              </Input>
               <Input
                 full
                 label="기획안명"
