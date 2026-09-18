@@ -14,3 +14,15 @@ export const createFestivalPlan = (payload, options = {}) =>
     }
     return response
   })
+
+export const parseFestivalPlan = (file, options = {}) => {
+  const formData = new FormData()
+  formData.append('file', file, file.name)
+
+  return request('/api/festival-plans/parse', {
+    ...options,
+    method: 'POST',
+    auth: true,
+    body: formData,
+  })
+}

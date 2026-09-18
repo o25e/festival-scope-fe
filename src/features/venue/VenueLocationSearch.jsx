@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { REGIONS } from '../../data/prototype'
+import { isResolvedVenueLocation } from '../input/festivalPlanParser'
 
 const NAVER_MAP_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID
 const NAVER_MAP_SCRIPT_ID = 'naver-maps-sdk'
@@ -371,6 +372,11 @@ export function useVenueLocationSearch({ plan, setPlan }) {
       return undefined
     }
 
+    if (isResolvedVenueLocation(plan.venueLocation, venue, regionKey)) {
+      setVenueLocationStatus('success')
+      return undefined
+    }
+
     const controller = new AbortController()
     setVenueLocationStatus('loading')
     setPlan((p) => (p.venueLocation ? { ...p, venueLocation: null } : p))
@@ -456,6 +462,7 @@ export function useVenueLocationSearch({ plan, setPlan }) {
           // Keep the aliases for existing consumers of the prototype data.
           lat: coordinates.latitude,
           lon: coordinates.longitude,
+          regionKey,
         }
 
         if (requestIdRef.current !== requestId || controller.signal.aborted) return
