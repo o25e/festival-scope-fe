@@ -87,6 +87,10 @@ export function LoginModal({
       setFormError('비밀번호를 입력해주세요.')
       return
     }
+    if (signupPassword.length < 8) {
+      setFormError('8자 이상 입력해주세요.')
+      return
+    }
 
     setFormError('')
     try {
@@ -104,8 +108,16 @@ export function LoginModal({
       setSuccessMessage('회원가입이 완료되었습니다. 로그인해주세요.')
       onModeChange?.('login')
     } catch (signupError) {
+      const signupErrorMessage = signupError?.message
+        ?.trim()
+        .toLowerCase()
+        .replace(/[.!?]+$/, '')
+      const isDuplicateEmail = signupErrorMessage === 'email is already registered'
       setFormError(
-        signupError?.message || '회원가입에 실패했습니다. 입력 정보를 확인해주세요.',
+        isDuplicateEmail
+          ? '이미 가입된 이메일입니다.'
+          : signupError?.message ||
+              '회원가입에 실패했습니다. 입력 정보를 확인해주세요.',
       )
     }
   }
