@@ -178,7 +178,11 @@ export async function request(
   } = {},
 ) {
   const requestHeaders = new Headers(headers)
-  if (body !== undefined) requestHeaders.set('Content-Type', 'application/json')
+  const isFormDataBody =
+    typeof FormData !== 'undefined' && body instanceof FormData
+  if (isFormDataBody) requestHeaders.delete('Content-Type')
+  else if (body !== undefined)
+    requestHeaders.set('Content-Type', 'application/json')
 
   const requestAccessToken = auth ? getAccessToken() : null
   if (auth) {
@@ -191,7 +195,12 @@ export async function request(
     response = await fetch(`${API_BASE_URL}${path}`, {
       method,
       headers: requestHeaders,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body:
+        body === undefined
+          ? undefined
+          : isFormDataBody
+            ? body
+            : JSON.stringify(body),
       signal,
     })
   } catch (error) {
