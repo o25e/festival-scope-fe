@@ -4,7 +4,7 @@ import { fmt, levelClass } from '../../utils/formatters'
 import { ITEMS, cardData } from '../analysis/analysisData'
 import { getDetailHtml } from '../analysis/DetailPanel'
 
-export function ReportScreen({ A, onBack, onPrint }) {
+export function ReportScreen({ A, onBack, onPrint, backLabel = '결과로 돌아가기' }) {
   const cards = ITEMS.map((item) => ({ item, data: cardData(item, A) }))
   const recommendations = useMemo(() => {
     const doc = new DOMParser().parseFromString(
@@ -39,7 +39,7 @@ export function ReportScreen({ A, onBack, onPrint }) {
           </div>
           <span className="spacer" />
           <Button small onClick={onBack}>
-            결과로 돌아가기
+            {backLabel}
           </Button>
           <Button small primary onClick={onPrint}>
             인쇄 / PDF 저장
