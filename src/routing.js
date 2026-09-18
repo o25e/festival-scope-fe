@@ -6,7 +6,7 @@ export function readRoute() {
   if (path === '/plans/new') return { name: 'input' }
 
   const reportMatch = path.match(/^\/reports\/([^/]+)$/)
-  if (reportMatch) return { name: 'report', planId: decodeURIComponent(reportMatch[1]) }
+  if (reportMatch) return { name: 'report', analysisId: decodeURIComponent(reportMatch[1]) }
 
   return { name: 'landing' }
 }

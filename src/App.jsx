@@ -51,13 +51,6 @@ const getResponseId = (value) => {
   return null
 }
 
-const formatPlanDate = (value) => value ? value.replaceAll('-', '.') : '—'
-const formatUploadedAt = (value = new Date()) => {
-  const month = String(value.getMonth() + 1).padStart(2, '0')
-  const day = String(value.getDate()).padStart(2, '0')
-  return `${month}.${day}`
-}
-
 export default function App() {
   const { isAuthenticated, isPending, login, signup, logout } = useAuth()
   const route = useRoute()
@@ -75,7 +68,6 @@ export default function App() {
     [isRegisteringPlan, setIsRegisteringPlan] = useState(false),
     [registrationError, setRegistrationError] = useState(''),
     [festivalPlanResponse, setFestivalPlanResponse] = useState(null),
-    [sourceFileName, setSourceFileName] = useState(''),
     [autoFilledFields, setAutoFilledFields] = useState({})
   const registrationInFlightRef = useRef(false)
   const A = useMemo(
@@ -106,9 +98,9 @@ export default function App() {
       }
       if (route.name === 'report') {
         const document =
-          activeDocument?.id === route.planId
+          activeDocument?.analysisId === route.analysisId
             ? activeDocument
-            : documents.find((item) => item.id === route.planId)
+            : documents.find((item) => String(item.analysisId) === route.analysisId)
         if (!document) {
           navigate('/documents', { replace: true })
           return
@@ -117,9 +109,9 @@ export default function App() {
           const reportPlan = normalizeFestivalPlan(
             document.plan || {
               ...EMPTY_PLAN,
-              planName: document.title,
-              name: document.title,
-              org: document.region,
+              planName: document.festivalName,
+              name: document.festivalName,
+              org: document.hostRegion,
             },
           )
           setPlan(reportPlan)
@@ -136,7 +128,7 @@ export default function App() {
       if (route.name !== 'landing') navigate('/', { replace: true })
       if (stage !== 'landing') setStage('landing')
     }
-  }, [activeDocument, documents, isAuthenticated, isSample, route.name, route.planId, stage])
+  }, [activeDocument, documents, isAuthenticated, isSample, route.analysisId, route.name, stage])
 
   useEffect(() => {
     const f = (e) => {
@@ -172,7 +164,6 @@ export default function App() {
       setStep(1)
       setRegistrationError('')
       setFestivalPlanResponse(null)
-      setSourceFileName('')
       setStage('input')
       navigate('/plans/new')
     },
@@ -188,15 +179,9 @@ export default function App() {
       const nextAnalysis = analyze(plan)
       const id = getResponseId(festivalPlanResponse) || `local-${Date.now()}`
       const document = {
-        id,
-        title: plan.planName || plan.name || '새 축제 기획안',
-        fileName: sourceFileName || '직접 입력한 기획안',
-        region: plan.org || [plan.sido, plan.sigungu].filter(Boolean).join(' ') || '—',
-        startDate: formatPlanDate(plan.start),
-        uploadedAt: formatUploadedAt(),
-        status: 'completed',
-        score: nextAnalysis.composite,
-        recommendations: 0,
+        analysisId: id,
+        festivalName: plan.planName || plan.name || '새 축제 기획안',
+        hostRegion: plan.org || [plan.sido, plan.sigungu].filter(Boolean).join(' ') || '—',
         plan,
       }
       setActiveDocument(document)
@@ -205,14 +190,13 @@ export default function App() {
       navigate(`/reports/${encodeURIComponent(id)}`)
     }
 
-  const handleParsedPlan = ({ response, fileName }) => {
+  const handleParsedPlan = ({ response }) => {
     const parsed = mergeParsedFestivalPlan(EMPTY_PLAN, response)
     if (!parsed.hasValues) return
 
     setPlan(parsed.plan)
     setAutoFilledFields(parsed.autoFilledFields || {})
-    setSourceFileName(fileName || '')
-    setActiveDocument(null)
+      setActiveDocument(null)
     setAnalysis(null)
     setStep(1)
     setRegistrationError('')
@@ -320,7 +304,7 @@ export default function App() {
             setAutoFilledFields({})
             setAnalysis(document.plan ? analyze(reportPlan) : null)
             setStage('report')
-            navigate(`/reports/${encodeURIComponent(document.id)}`)
+            navigate(`/reports/${encodeURIComponent(document.analysisId)}`)
           }}
         />
       )}

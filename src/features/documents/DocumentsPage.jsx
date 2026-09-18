@@ -132,7 +132,7 @@ export function DocumentsPage({ onParsedPlan, onOpenReport, onDocumentsLoaded })
     if (!normalized) return state.documents
 
     return state.documents.filter((document) =>
-      [document.title, document.region]
+      [document.festivalName, document.hostRegion]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(normalized)),
     )
@@ -172,26 +172,25 @@ export function DocumentsPage({ onParsedPlan, onOpenReport, onDocumentsLoaded })
     }
 
     return filteredDocuments.map((document) => (
-      <div className="documents-row" role="row" key={document.id}>
+      <div className="documents-row" role="row" key={document.analysisId}>
         <div className="document-title-cell" role="cell">
           <button
             type="button"
             disabled={document.status !== DOCUMENT_STATUS.COMPLETED}
             onClick={() => onOpenReport(document)}
           >
-            {document.title}
+            {document.festivalName}
           </button>
-          <small>{document.fileName}</small>
         </div>
-        <div role="cell">{document.region}</div>
-        <div role="cell">{document.startDate}</div>
+        <div role="cell">{document.hostRegion}</div>
+        <div role="cell">{document.festivalPeriod}</div>
         <div role="cell">
-          <strong className={`document-score score-${document.score == null ? 'none' : document.score >= 75 ? 'high' : document.score >= 60 ? 'mid' : 'low'}`}>
-            {document.score == null ? '-' : document.score}
+          <strong className={`document-score score-${document.overallScore == null ? 'none' : document.overallScore >= 75 ? 'high' : document.overallScore >= 60 ? 'mid' : 'low'}`}>
+            {document.overallScore == null ? '-' : document.overallScore}
           </strong>
         </div>
-        <div role="cell">{document.recommendations == null ? '-' : `${document.recommendations}건`}</div>
-        <div role="cell">{document.uploadedAt}</div>
+        <div role="cell">{document.recommendationCount == null ? '-' : `${document.recommendationCount}건`}</div>
+        <div role="cell">{document.inputDate}</div>
       </div>
     ))
   }
@@ -259,12 +258,12 @@ export function DocumentsPage({ onParsedPlan, onOpenReport, onDocumentsLoaded })
         <section className="formcard documents-table-card" aria-live="polite">
           <div className="documents-table" role="table" aria-label="분석 문서 목록">
             <div className="documents-row documents-row-head" role="row">
-              <div role="columnheader">기획안</div>
+              <div role="columnheader">축제명</div>
               <div role="columnheader">지자체</div>
-              <div role="columnheader">개최 예정</div>
-              <div role="columnheader">흥행 가능성</div>
+              <div role="columnheader">개최 기간</div>
+              <div role="columnheader">흥행 점수</div>
               <div role="columnheader">수정 권고</div>
-              <div role="columnheader">업로드</div>
+              <div role="columnheader">입력일</div>
             </div>
             {renderBody()}
           </div>

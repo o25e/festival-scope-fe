@@ -17,7 +17,7 @@ const formatDateRange = (start, end) => {
   return `${formattedStart} ~ ${formattedEnd.slice(5)}`
 }
 
-const formatUploadedAt = (value) => {
+const formatInputDate = (value) => {
   if (!value) return '-'
   const parts = String(value).slice(0, 10).split('-')
   return parts.length === 3 ? `${parts[1]}.${parts[2]}` : String(value)
@@ -25,13 +25,12 @@ const formatUploadedAt = (value) => {
 
 export const mapAnalysisDocument = (item = {}) => ({
   ...item,
-  id: String(item.analysisId),
-  title: item.festivalName || '-',
-  fileName: item.fileName || '-',
-  region: item.hostRegion || '-',
-  startDate: formatDateRange(item.festivalStartDate, item.festivalEndDate),
-  uploadedAt: formatUploadedAt(item.inputDate),
+  analysisId: item.analysisId,
+  festivalName: item.festivalName || '-',
+  hostRegion: item.hostRegion || '-',
+  festivalPeriod: formatDateRange(item.festivalStartDate, item.festivalEndDate),
+  inputDate: formatInputDate(item.inputDate),
   status: item.status || DOCUMENT_STATUS.COMPLETED,
-  score: item.overallScore ?? null,
-  recommendations: item.recommendations ?? null,
+  overallScore: item.overallScore ?? null,
+  recommendationCount: item.recommendationCount ?? null,
 })
