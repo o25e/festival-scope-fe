@@ -961,6 +961,7 @@ export const REGIONS = {
 }
 
 export const SAMPLE = {
+  planName: '영월 가을별빛 야행축제 기획안',
   name: '영월 가을별빛 야행축제',
   org: '강원특별자치도 영월군',
   festivalThemes: [
