@@ -19,6 +19,8 @@ const VENUE_TYPE_BY_API_VALUE = {
 
 const normalize = (value) => String(value ?? '').trim().replace(/\s+/g, ' ')
 
+const MAX_PROGRAM_NAMES = 5
+
 const nonEmptyText = (value) => {
   const text = normalize(value)
   return text || null
@@ -95,11 +97,24 @@ const getThemePair = (code) => {
 const getProgramIds = (programNames) => {
   if (!Array.isArray(programNames)) return []
   const parsedNames = new Set(
-    programNames.map(normalize).filter(Boolean),
+    programNames
+      .filter((programName) => typeof programName === 'string')
+      .map(normalize)
+      .filter(Boolean),
   )
   return PROGRAMS.filter((program) => parsedNames.has(normalize(program.n))).map(
     (program) => program.id,
   )
+}
+
+const getValidProgramNames = (programNames) => {
+  if (!Array.isArray(programNames)) return []
+  return [...new Set(
+    programNames
+      .filter((programName) => typeof programName === 'string')
+      .map(normalize)
+      .filter(Boolean),
+  )]
 }
 
 const hasResolvedCoordinates = (location) =>
@@ -146,12 +161,29 @@ export function normalizeFestivalPlan(plan = {}) {
   const parsedRegionParts = getParsedRegionParts({ region: plan.region })
   const maxCapacity =
     plan.maxCapacity ?? finiteNumber(plan.venueCapacity) ?? null
+  const programNames = Array.isArray(plan.programNames)
+    ? getValidProgramNames(plan.programNames).slice(0, MAX_PROGRAM_NAMES)
+    : PROGRAMS.filter((program) => (plan.programs || []).includes(program.id)).map(
+        (program) => program.n,
+      ).slice(0, MAX_PROGRAM_NAMES)
+  const programCandidates = Array.isArray(plan.programCandidates)
+    ? getValidProgramNames(plan.programCandidates)
+    : programNames
+  const customProgramNames = Array.isArray(plan.customProgramNames)
+    ? getValidProgramNames(plan.customProgramNames).filter((programName) =>
+        programCandidates.includes(programName),
+      )
+    : []
   const next = {
     ...plan,
     sido: plan.sido || legacyRegionParts?.sido || parsedRegionParts.sido || '',
     sigungu:
       plan.sigungu || legacyRegionParts?.sigungu || parsedRegionParts.sigungu || '',
     maxCapacity,
+    programNames,
+    programCandidates,
+    customProgramNames,
+    programs: getProgramIds(programNames),
   }
 
   if (next.venueLocation) {
@@ -221,8 +253,13 @@ export function mergeParsedFestivalPlan(plan, response) {
     : []
   if (themePairs.length) patch.festivalThemes = themePairs.slice(0, 2)
 
-  const programIds = getProgramIds(parsed.programNames)
-  if (programIds.length) patch.programs = programIds
+  const programCandidates = getValidProgramNames(parsed.programNames)
+  if (programCandidates.length) {
+    patch.programCandidates = programCandidates
+    patch.customProgramNames = []
+    patch.programNames = []
+    patch.programs = []
+  }
 
   const venueLocation = buildVenueLocation(basePlan, parsed, patch)
   if (venueLocation) patch.venueLocation = venueLocation

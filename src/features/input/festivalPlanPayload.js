@@ -49,6 +49,21 @@ const getRegionParts = (plan) => {
   return { sido, sigungu }
 }
 
+const getProgramNames = (plan) => {
+  const source =
+    Array.isArray(plan.programNames)
+      ? plan.programNames
+      : PROGRAMS.filter((program) => (plan.programs || []).includes(program.id)).map(
+          (program) => program.n,
+        )
+
+  return source
+    .filter((programName) => typeof programName === 'string')
+    .map((programName) => programName.trim().replace(/\s+/g, ' '))
+    .filter(Boolean)
+    .slice(0, 5)
+}
+
 export function buildFestivalPlanPayload(plan) {
   const venueLocation = plan.venueLocation
   if (!venueLocation?.address) {
@@ -65,9 +80,7 @@ export function buildFestivalPlanPayload(plan) {
   const themeCodes = (plan.festivalThemes || [])
     .map((pair) => String(pair.topic || '').trim())
     .filter(Boolean)
-  const programNames = PROGRAMS.filter((program) =>
-    (plan.programs || []).includes(program.id),
-  ).map((program) => program.n)
+  const programNames = getProgramNames(plan)
   const firstHeldYear =
     plan.eventType === 'new'
       ? null

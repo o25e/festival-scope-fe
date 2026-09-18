@@ -80,10 +80,10 @@ export function ReviewScreen({
         : `${fmt(plan.maxCapacity)}명`,
     ],
     [
-      '프로그램 구성',
-      PROGRAMS.filter((p) => plan.programs.includes(p.id))
-        .map((p) => p.n)
-        .join(', '),
+      '핵심 프로그램',
+      (Array.isArray(plan.programNames) ? plan.programNames : PROGRAMS.filter((p) => plan.programs.includes(p.id)).map((p) => p.n))
+        .filter((programName) => String(programName).trim())
+        .join(', ') || '선택 없음',
     ],
   ]
   return (

@@ -261,7 +261,7 @@ export function getDetailHtml(item, A) {
       sec(
         2,
         '판단 근거 및 데이터',
-        `<div class="vizbox">${lineChart(YEARS, [{ v: T.series, c: v.v2 === '하락' ? '#C2634C' : '#12557E', area: true, last: T.series[4] }], { max: 110 })}<p class="vizcap">주제 키워드군(${T.kw})의 통합 검색 관심도. 최댓값 100 기준 상대 지수입니다.</p></div><table class="dt" style="margin-top:12px"><tr><th>세부 키워드</th><th class="n">2022</th><th class="n">2026</th><th>추이</th></tr>${T.detail.map((d) => `<tr><td>${d.k}</td><td class="n" style="color:var(--muted)">${d.v[0]}</td><td class="n"><b>${d.v[4]}</b></td><td><span class="tagsm ${d.v[4] - d.v[0] > 12 ? 'g' : d.v[4] - d.v[0] < -12 ? 'r' : 'n'}">${d.d}</span></td></tr>`).join('')}</table><p class="vizcap" style="margin-top:9px">프로그램 구성에 포함된 요소별로 관심 흐름이 다릅니다. 같은 주제 안에서도 상승 키워드와 하락 키워드를 구분해 배치 비중을 정하는 근거로 사용합니다.</p>`,
+        `<div class="vizbox">${lineChart(YEARS, [{ v: T.series, c: v.v2 === '하락' ? '#C2634C' : '#12557E', area: true, last: T.series[4] }], { max: 110 })}<p class="vizcap">주제 키워드군(${T.kw})의 통합 검색 관심도. 최댓값 100 기준 상대 지수입니다.</p></div><table class="dt" style="margin-top:12px"><tr><th>세부 키워드</th><th class="n">2022</th><th class="n">2026</th><th>추이</th></tr>${T.detail.map((d) => `<tr><td>${d.k}</td><td class="n" style="color:var(--muted)">${d.v[0]}</td><td class="n"><b>${d.v[4]}</b></td><td><span class="tagsm ${d.v[4] - d.v[0] > 12 ? 'g' : d.v[4] - d.v[0] < -12 ? 'r' : 'n'}">${d.d}</span></td></tr>`).join('')}</table><p class="vizcap" style="margin-top:9px">핵심 프로그램에 포함된 요소별로 관심 흐름이 다릅니다. 같은 주제 안에서도 상승 키워드와 하락 키워드를 구분해 배치 비중을 정하는 근거로 사용합니다.</p>`,
       ) +
       sec(
         3,
@@ -422,15 +422,15 @@ export function getDetailHtml(item, A) {
       sec(
         3,
         '결과 해석',
-        `<div class="readbox read"><p>${m + 1}월 동일 시기에 강수가 관측된 해는 최근 10년 중 ${W.rainYears[m]}년(${v.rainP}%)입니다. 선택한 프로그램 구성과 기상 이력을 결합한 행사 기상 취약도는 <strong>${v.wRisk}점(${v.v5})</strong>입니다.</p><p>${
+        `<div class="readbox read"><p>${m + 1}월 동일 시기에 강수가 관측된 해는 최근 10년 중 ${W.rainYears[m]}년(${v.rainP}%)입니다. 선택한 핵심 프로그램과 기상 이력을 결합한 행사 기상 취약도는 <strong>${v.wRisk}점(${v.v5})</strong>입니다.</p><p>${
           v.wFlags.filter((f) => f.risk).length
             ? `특히 ${v.wFlags
                 .filter((f) => f.risk)
                 .map((f) => f.t)
                 .join(
                   ' · ',
-                )} 요소가 현재 프로그램 구성과 직접 맞물립니다. ${v.wFlags.filter((f) => f.risk)[0].p} 계획이 기상 조건에 따라 취소 또는 축소될 수 있습니다.`
-            : '현재 프로그램 구성에서 기상 조건과 직접 충돌하는 요소는 크지 않습니다.'
+                )} 요소가 현재 핵심 프로그램과 직접 맞물립니다. ${v.wFlags.filter((f) => f.risk)[0].p} 계획이 기상 조건에 따라 취소 또는 축소될 수 있습니다.`
+            : '현재 핵심 프로그램에서 기상 조건과 직접 충돌하는 요소는 크지 않습니다.'
         }</p></div>`,
       ) +
       sec(

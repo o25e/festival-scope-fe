@@ -355,6 +355,107 @@ select:focus-visible {
   color: var(--brand);
   font-weight: 600;
 }
+.program-candidate-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+}
+.program-candidate-list .chips {
+  width: 100%;
+  padding: 2px 0 4px;
+}
+.program-candidate-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.program-candidate-item.custom {
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  background: var(--surface);
+}
+.program-candidate-item.custom.on {
+  border-color: var(--brand);
+  background: var(--brandsoft);
+  color: var(--brand);
+}
+.program-candidate-item.custom .chk {
+  border: 0;
+  border-radius: 99px 0 0 99px;
+  background: transparent;
+  padding-right: 4px;
+}
+.program-candidate-item.custom .chk.on {
+  background: transparent;
+}
+.program-remove-button {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  margin-right: 3px;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+.program-remove-button:hover {
+  background: var(--risksoft);
+  color: var(--risk);
+}
+.program-add-button {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-color: var(--brand);
+  border-radius: 50%;
+  background: var(--brandsoft);
+  color: var(--brand);
+  font-size: 21px;
+  font-weight: 500;
+  line-height: 1;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(18, 85, 126, 0.12);
+  transition:
+    background 0.12s,
+    color 0.12s,
+    box-shadow 0.12s,
+    transform 0.12s;
+}
+.program-add-button:hover {
+  background: var(--brand);
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(18, 85, 126, 0.2);
+  transform: translateY(-1px);
+}
+.program-add-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(100%, 560px);
+  margin: 2px 0;
+}
+.program-add-row input {
+  flex: 1;
+  min-width: 0;
+}
+.program-add-row .btn {
+  min-width: 38px;
+  padding: 0 10px;
+  justify-content: center;
+}
+.chk.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 .formfoot {
   display: flex;
   align-items: center;

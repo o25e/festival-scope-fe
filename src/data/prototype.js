@@ -1029,6 +1029,21 @@ export const SAMPLE = {
   start: '2027-10-15',
   end: '2027-10-18',
   programs: ['media', 'astro', 'drone', 'market', 'stage'],
+  programNames: [
+    '야간 미디어아트 산책로',
+    '천문 관측 체험',
+    '드론 라이트쇼',
+    '로컬푸드 야시장',
+    '버스킹 · 야외 공연',
+  ],
+  programCandidates: [
+    '야간 미디어아트 산책로',
+    '천문 관측 체험',
+    '드론 라이트쇼',
+    '로컬푸드 야시장',
+    '버스킹 · 야외 공연',
+  ],
+  customProgramNames: [],
 }
 export const FLOW = [
   ['input', '기획안 입력'],

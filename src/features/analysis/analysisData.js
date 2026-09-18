@@ -34,7 +34,7 @@ export const ITEMS = [
     no: 5,
     scored: false,
     name: '날씨 리스크',
-    scope: '과거 동일 시기 기상 통계 × 선택 프로그램 구성',
+    scope: '과거 동일 시기 기상 통계 × 선택 핵심 프로그램',
   },
   {
     key: 'link',
@@ -125,7 +125,7 @@ export function cardData(item, A) {
       metric: `${v.rainP}%`,
       unit: `${A.m + 1}월 동일 시기 강수 발생률`,
       sub: [['기상 취약 프로그램', `${A.progs.filter((x) => x.out || x.wind || x.fog).length}개`]],
-      read: `동일 시기 강수 발생률은 ${v.rainP}%이며, 현재 선택한 프로그램 구성의 기상 취약도는 ${v.wRisk}점(${v.v5})입니다.`,
+      read: `동일 시기 강수 발생률은 ${v.rainP}%이며, 현재 선택한 핵심 프로그램의 기상 취약도는 ${v.wRisk}점(${v.v5})입니다.`,
       bars: A.R.weather.rainYears,
       highlight: A.m,
     }
