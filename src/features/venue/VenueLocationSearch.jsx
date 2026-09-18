@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { REGIONS } from '../../data/prototype'
 import { isResolvedVenueLocation } from '../input/festivalPlanParser'
 
 const NAVER_MAP_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID
@@ -361,8 +360,8 @@ export function useVenueLocationSearch({ plan, setPlan }) {
 
   useEffect(() => {
     const venue = plan.venue.trim()
-    const regionKey = plan.region
-    const regionName = REGIONS[regionKey]?.name || ''
+    const region = { sido: plan.sido, sigungu: plan.sigungu }
+    const regionName = [plan.sido, plan.sigungu].filter(Boolean).join(' ')
     const requestId = requestIdRef.current + 1
     requestIdRef.current = requestId
 
@@ -372,7 +371,7 @@ export function useVenueLocationSearch({ plan, setPlan }) {
       return undefined
     }
 
-    if (isResolvedVenueLocation(plan.venueLocation, venue, regionKey)) {
+    if (isResolvedVenueLocation(plan.venueLocation, venue, region)) {
       setVenueLocationStatus('success')
       return undefined
     }
@@ -462,12 +461,15 @@ export function useVenueLocationSearch({ plan, setPlan }) {
           // Keep the aliases for existing consumers of the prototype data.
           lat: coordinates.latitude,
           lon: coordinates.longitude,
-          regionKey,
+          sido: plan.sido,
+          sigungu: plan.sigungu,
         }
 
         if (requestIdRef.current !== requestId || controller.signal.aborted) return
         setPlan((p) =>
-          p.venue.trim() === venue && p.region === regionKey
+          p.venue.trim() === venue &&
+          p.sido === region.sido &&
+          p.sigungu === region.sigungu
             ? { ...p, venueLocation: location }
             : p,
         )
@@ -481,7 +483,9 @@ export function useVenueLocationSearch({ plan, setPlan }) {
           return
         }
         setPlan((p) =>
-          p.venue.trim() === venue && p.region === regionKey
+          p.venue.trim() === venue &&
+          p.sido === region.sido &&
+          p.sigungu === region.sigungu
             ? { ...p, venueLocation: null }
             : p,
         )
@@ -494,7 +498,7 @@ export function useVenueLocationSearch({ plan, setPlan }) {
       window.clearTimeout(timer)
       controller.abort()
     }
-  }, [plan.venue, plan.region, setPlan])
+  }, [plan.venue, plan.sido, plan.sigungu, setPlan])
 
   return venueLocationStatus
 }

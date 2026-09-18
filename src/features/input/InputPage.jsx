@@ -3,7 +3,7 @@ import {
   FESTIVAL_TYPES,
   getFestivalTopics,
   PROGRAMS,
-  REGIONS,
+  REGION_OPTIONS,
 } from '../../data/prototype'
 import { Button, Input, WarningNotice } from '../../components/ui'
 import {
@@ -23,7 +23,13 @@ export function FormScreen({
   const [errors, setErrors] = useState([])
   const venueLocationStatus = useVenueLocationSearch({ plan, setPlan })
   const update = (k, v) => setPlan((p) => ({ ...p, [k]: v }))
-  const showVenueCapacityWarning = !String(plan.venueCapacity ?? '').trim()
+  const sidoOptions = [
+    ...new Set([...REGION_OPTIONS.map((option) => option.sido), plan.sido].filter(Boolean)),
+  ]
+  const sigunguOptions = REGION_OPTIONS.filter(
+    (option) => option.sido === plan.sido,
+  )
+  const showCapacityWarning = plan.maxCapacity === null || plan.maxCapacity === ''
   const pairs = plan.festivalThemes?.length
     ? plan.festivalThemes
     : [{ type: '', topic: '' }]
@@ -60,6 +66,25 @@ export function FormScreen({
         }
       }),
     }))
+  }
+  const updateSido = (sido) => {
+    setPlan((p) => ({
+      ...p,
+      sido,
+      sigungu: REGION_OPTIONS.some(
+        (option) => option.sido === sido && option.sigungu === p.sigungu,
+      )
+        ? p.sigungu
+        : '',
+    }))
+  }
+  const updateCapacity = (value) => {
+    if (value === '') {
+      update('maxCapacity', '')
+      return
+    }
+    const number = Number(value)
+    if (Number.isInteger(number) && number >= 0) update('maxCapacity', number)
   }
   const addPair = () => {
     setPlan((p) =>
@@ -102,6 +127,15 @@ export function FormScreen({
     )
       e.push('최초 개최 이력(4자리 연도)')
     if (step >= 2 && !plan.venue.trim()) e.push('행사장명')
+    if (step >= 2 && !String(plan.sido ?? '').trim()) e.push('시도')
+    if (step >= 2 && !String(plan.sigungu ?? '').trim()) e.push('시군구')
+    if (
+      step >= 2 &&
+      plan.maxCapacity !== null &&
+      plan.maxCapacity !== '' &&
+      (!Number.isInteger(Number(plan.maxCapacity)) || Number(plan.maxCapacity) < 0)
+    )
+      e.push('최대 수용 인원')
     if (step >= 2 && !plan.start) e.push('개최 시작일')
     if (step >= 2 && !plan.end) e.push('개최 종료일')
     if (step >= 2 && plan.start && plan.end && plan.end < plan.start)
@@ -346,16 +380,45 @@ export function FormScreen({
           )}
           {step === 2 && (
             <div className="fieldgrid event-place-grid">
-              <Input label="개최 지역" auto={autoFilledFields.region}>
+              <Input
+                label="시도"
+                auto={autoFilledFields.sido}
+                error={errors.includes('시도')}
+              >
                 <select
-                  value={plan.region}
-                  onChange={(e) => update('region', e.target.value)}
+                  value={plan.sido || ''}
+                  onChange={(e) => updateSido(e.target.value)}
                 >
-                  {Object.entries(REGIONS).map(([k, r]) => (
-                    <option key={k} value={k}>
-                      {r.name}
+                  <option value="">시도를 선택하세요</option>
+                  {sidoOptions.map((sido) => (
+                    <option key={sido} value={sido}>
+                      {sido}
                     </option>
                   ))}
+                </select>
+              </Input>
+              <Input
+                label="시군구"
+                auto={autoFilledFields.sigungu}
+                error={errors.includes('시군구')}
+              >
+                <select
+                  value={plan.sigungu || ''}
+                  onChange={(e) => update('sigungu', e.target.value)}
+                  disabled={!plan.sido}
+                >
+                  <option value="">
+                    {plan.sido ? '시군구를 선택하세요' : '시도를 먼저 선택하세요'}
+                  </option>
+                  {sigunguOptions.map((option) => (
+                    <option key={`${option.sido}-${option.sigungu}`} value={option.sigungu}>
+                      {option.sigungu}
+                    </option>
+                  ))}
+                  {plan.sigungu &&
+                    !sigunguOptions.some((option) => option.sigungu === plan.sigungu) && (
+                      <option value={plan.sigungu}>{plan.sigungu}</option>
+                    )}
                 </select>
               </Input>
               <Input label="행사장 유형" auto={autoFilledFields.venueType}>
@@ -383,31 +446,30 @@ export function FormScreen({
               </Input>
               <Input
                 full
-                label="행사장 수용 규모"
-                auto={autoFilledFields.venueCapacity}
-                hint="최대 수용 인원 기준"
+                label="최대 수용 인원"
+                auto={autoFilledFields.maxCapacity}
+                hint="명 단위 · 선택 입력"
+                error={errors.includes('최대 수용 인원')}
               >
                 <input
-                  type="text"
-                  value={plan.venueCapacity || ''}
-                  onChange={(e) => update('venueCapacity', e.target.value)}
-                  placeholder="예: 500명, 500~1,000명, 미정"
+                  type="number"
+                  min="0"
+                  step="1"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={plan.maxCapacity ?? ''}
+                  onChange={(e) => updateCapacity(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault()
+                  }}
+                  placeholder="예: 500"
                 />
-                {showVenueCapacityWarning && (
+                {showCapacityWarning && (
                   <div className="capacity-warnings">
                     <WarningNotice>
-                      기획안에서 수용 규모가 확인되지 않았습니다.
+                      기획안에서 최대 수용 인원이 확인되지 않았습니다.
                       <br />
-                      예상 수용 규모를 직접 입력해주세요.
-                    </WarningNotice>
-                    <WarningNotice>
-                      <strong>입력이 어려운 경우</strong>
-                      <br />
-                      정확한 수치를 모르는 경우, 예상 범위를 입력하거나 '미정'으로
-                      표시해도 분석이 가능합니다.
-                      <br />
-                      (단, 수용 규모가 없을 경우 일부 분석의 정확도가 낮아질 수
-                      있습니다.)
+                      예상 최대 인원을 숫자로 입력해주세요. 모르면 비워둘 수 있습니다.
                     </WarningNotice>
                   </div>
                 )}

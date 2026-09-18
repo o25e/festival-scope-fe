@@ -960,6 +960,54 @@ export const REGIONS = {
   }),
 }
 
+const REGION_SIDO_ALIASES = {
+  서울특별시: '서울',
+  부산광역시: '부산',
+  대구광역시: '대구',
+  인천광역시: '인천',
+  광주광역시: '광주',
+  대전광역시: '대전',
+  울산광역시: '울산',
+  세종특별자치시: '세종',
+  경기도: '경기',
+  강원도: '강원',
+  강원특별자치도: '강원',
+  충청북도: '충북',
+  충청남도: '충남',
+  전라북도: '전북',
+  전북특별자치도: '전북',
+  전라남도: '전남',
+  경상북도: '경북',
+  경상남도: '경남',
+  제주특별자치도: '제주',
+}
+
+const normalizeRegionPart = (value) => {
+  const text = String(value ?? '').trim().replace(/\s+/g, ' ')
+  return REGION_SIDO_ALIASES[text] || text
+}
+
+export const REGION_OPTIONS = Object.entries(REGIONS).map(([key, region]) => {
+  const [rawSido, ...sigunguParts] = String(region.name || '').trim().split(/\s+/)
+  const sido = normalizeRegionPart(rawSido)
+  const sigungu = sigunguParts.join(' ')
+  return { key, sido, sigungu, name: `${sido} ${sigungu}`, region }
+})
+
+export const getRegionOption = (sido, sigungu) => {
+  const normalizedSido = normalizeRegionPart(sido)
+  const normalizedSigungu = String(sigungu ?? '').trim().replace(/\s+/g, ' ')
+  return REGION_OPTIONS.find(
+    (option) =>
+      option.sido === normalizedSido && option.sigungu === normalizedSigungu,
+  )
+}
+
+export const getRegionParts = (regionKey) => {
+  const option = REGION_OPTIONS.find((item) => item.key === regionKey)
+  return option ? { sido: option.sido, sigungu: option.sigungu } : null
+}
+
 export const SAMPLE = {
   planName: '영월 가을별빛 야행축제 기획안',
   name: '영월 가을별빛 야행축제',
@@ -971,12 +1019,13 @@ export const SAMPLE = {
   eventType: 'existing',
   firstHeldYear: 2018,
   target: 120000,
-  region: 'yeongwol',
+  sido: '강원',
+  sigungu: '영월군',
   venuetype: 'outdoor',
   venueType: 'outdoor',
   venue: '동강둔치공원',
   venueLocation: null,
-  venueCapacity: '미정',
+  maxCapacity: null,
   start: '2027-10-15',
   end: '2027-10-18',
   programs: ['media', 'astro', 'drone', 'market', 'stage'],
@@ -1010,7 +1059,8 @@ const dadd = (d, n) => {
   return x
 }
 export function analyze(p) {
-  const R = REGIONS[p.region] || REGIONS.yeongwol,
+  const regionOption = getRegionOption(p.sido, p.sigungu)
+  const R = regionOption?.region || REGIONS[p.region] || REGIONS.yeongwol,
     topicPairs = p.festivalThemes?.length
       ? p.festivalThemes
       : [{ type: '', topic: '' }],

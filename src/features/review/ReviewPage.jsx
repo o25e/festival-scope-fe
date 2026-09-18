@@ -3,7 +3,6 @@ import {
   getFestivalTopicLabel,
   getFestivalTypeLabel,
   PROGRAMS,
-  REGIONS,
 } from '../../data/prototype'
 import { fmt } from '../../utils/formatters'
 
@@ -19,7 +18,7 @@ export function ReviewScreen({
   isSubmitting = false,
   error = '',
 }) {
-  const R = REGIONS[plan.region],
+  const regionName = [plan.sido, plan.sigungu].filter(Boolean).join(' ') || '미입력',
     days = Math.max(
       1,
       Math.round((new Date(plan.end) - new Date(plan.start)) / 86400000) + 1,
@@ -59,7 +58,7 @@ export function ReviewScreen({
         {plan.start} ~ {plan.end} <small>· {days}일</small>
       </>,
     ],
-    ['개최 지역', R.name],
+    ['개최 지역', regionName],
     [
       '행사장',
       <>
@@ -74,7 +73,12 @@ export function ReviewScreen({
         </small>
       </>,
     ],
-    ['행사장 수용 규모', plan.venueCapacity || '미정'],
+    [
+      '최대 수용 인원',
+      plan.maxCapacity === null || plan.maxCapacity === '' || plan.maxCapacity === undefined
+        ? '미정'
+        : `${fmt(plan.maxCapacity)}명`,
+    ],
     [
       '프로그램 구성',
       PROGRAMS.filter((p) => plan.programs.includes(p.id))
