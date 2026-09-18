@@ -37,6 +37,9 @@ const EMPTY_PLAN = {
   start: '',
   end: '',
   programs: [],
+  programNames: [],
+  programCandidates: [],
+  customProgramNames: [],
 }
 
 const getResponseId = (value) => {
@@ -257,6 +260,9 @@ export default function App() {
       ...SAMPLE,
       festivalThemes: SAMPLE.festivalThemes.map((pair) => ({ ...pair })),
       programs: [...SAMPLE.programs],
+      programNames: [...(SAMPLE.programNames || [])],
+      programCandidates: [...(SAMPLE.programCandidates || SAMPLE.programNames || [])],
+      customProgramNames: [...(SAMPLE.customProgramNames || [])],
     }
     setOpenKey(null)
     setPlan(samplePlan)

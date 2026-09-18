@@ -11,6 +11,33 @@ import {
   useVenueLocationSearch,
 } from '../venue/VenueLocationSearch'
 
+const MAX_PROGRAM_NAMES = 5
+
+const normalizeProgramName = (value) =>
+  String(value ?? '').trim().replace(/\s+/g, ' ')
+
+const getProgramNamesForPlan = (plan) => {
+  if (Array.isArray(plan.programNames)) return plan.programNames
+  return PROGRAMS.filter((program) => (plan.programs || []).includes(program.id)).map(
+    (program) => program.n,
+  ).slice(0, MAX_PROGRAM_NAMES)
+}
+
+const getProgramCandidatesForPlan = (plan) =>
+  Array.isArray(plan.programCandidates)
+    ? plan.programCandidates
+    : getProgramNamesForPlan(plan)
+
+const getCustomProgramNamesForPlan = (plan) =>
+  Array.isArray(plan.customProgramNames) ? plan.customProgramNames : []
+
+const getKnownProgramIds = (programNames) => {
+  const normalizedNames = new Set(programNames.map(normalizeProgramName).filter(Boolean))
+  return PROGRAMS.filter((program) =>
+    normalizedNames.has(normalizeProgramName(program.n)),
+  ).map((program) => program.id)
+}
+
 export function FormScreen({
   plan,
   setPlan,
@@ -21,6 +48,8 @@ export function FormScreen({
   setAutoFilledFields,
 }) {
   const [errors, setErrors] = useState([])
+  const [isAddingProgram, setIsAddingProgram] = useState(false)
+  const [newProgramName, setNewProgramName] = useState('')
   const venueLocationStatus = useVenueLocationSearch({ plan, setPlan })
   const update = (k, v) => setPlan((p) => ({ ...p, [k]: v }))
   const sidoOptions = [
@@ -33,6 +62,9 @@ export function FormScreen({
   const pairs = plan.festivalThemes?.length
     ? plan.festivalThemes
     : [{ type: '', topic: '' }]
+  const programNames = getProgramNamesForPlan(plan)
+  const programCandidates = getProgramCandidatesForPlan(plan)
+  const customProgramNames = getCustomProgramNamesForPlan(plan)
   const updateEventType = (eventType) => {
     setPlan((p) => ({
       ...p,
@@ -140,7 +172,6 @@ export function FormScreen({
     if (step >= 2 && !plan.end) e.push('개최 종료일')
     if (step >= 2 && plan.start && plan.end && plan.end < plan.start)
       e.push('개최 종료일(시작일보다 빠름)')
-    if (step >= 3 && !plan.programs.length) e.push('프로그램 구성')
     setErrors(e)
     return !e.length
   }
@@ -148,11 +179,69 @@ export function FormScreen({
     if (!validate()) return
     step < 3 ? setStep(step + 1) : onReview({ ...plan })
   }
-  const toggle = (id) => {
-    const programs = plan.programs.includes(id)
-      ? plan.programs.filter((x) => x !== id)
-      : [...plan.programs, id]
-    update('programs', programs)
+  const updateSelectedProgramNames = (nextProgramNames) => {
+    const names = nextProgramNames
+      .map(normalizeProgramName)
+      .filter(Boolean)
+      .slice(0, MAX_PROGRAM_NAMES)
+    const programs = getKnownProgramIds(names)
+
+    setPlan((current) => ({
+      ...current,
+      programNames: names,
+      programs,
+    }))
+  }
+  const toggleProgram = (programName) => {
+    if (programNames.includes(programName)) {
+      updateSelectedProgramNames(programNames.filter((name) => name !== programName))
+      return
+    }
+    if (programNames.length >= MAX_PROGRAM_NAMES) return
+    updateSelectedProgramNames([...programNames, programName])
+  }
+  const addProgramCandidate = () => {
+    const normalizedName = normalizeProgramName(newProgramName)
+    if (!normalizedName) return
+
+    setPlan((current) => {
+      const candidates = getProgramCandidatesForPlan(current)
+      if (candidates.some((candidate) => normalizeProgramName(candidate) === normalizedName)) {
+        return current
+      }
+      return {
+        ...current,
+        programCandidates: [...candidates, normalizedName],
+        customProgramNames: [
+          ...getCustomProgramNamesForPlan(current),
+          normalizedName,
+        ],
+      }
+    })
+    setNewProgramName('')
+    setIsAddingProgram(false)
+  }
+  const removeProgramCandidate = (programName) => {
+    const normalizedName = normalizeProgramName(programName)
+    setPlan((current) => {
+      const candidates = getProgramCandidatesForPlan(current).filter(
+        (candidate) => normalizeProgramName(candidate) !== normalizedName,
+      )
+      const customNames = getCustomProgramNamesForPlan(current).filter(
+        (candidate) => normalizeProgramName(candidate) !== normalizedName,
+      )
+      const selectedNames = getProgramNamesForPlan(current).filter(
+        (candidate) => normalizeProgramName(candidate) !== normalizedName,
+      )
+
+      return {
+        ...current,
+        programCandidates: candidates,
+        customProgramNames: customNames,
+        programNames: selectedNames,
+        programs: getKnownProgramIds(selectedNames),
+      }
+    })
   }
   const names = ['축제 기본 정보', '개최 일정 · 장소', '프로그램 · 운영']
   return (
@@ -161,7 +250,7 @@ export function FormScreen({
         <h1 className="page-h">축제 기획안 입력</h1>
         <p className="page-sub page-lead">
           분석에 쓰이는 값만 받습니다. 목표 방문객·개최
-          일정·지역·행사장·주제·프로그램 구성이 비면 분석을 실행할 수 없습니다.
+          일정·지역·행사장·주제가 비면 분석을 실행할 수 없습니다.
         </p>
         <div className="formcard">
           <div className="formhead">
@@ -506,25 +595,90 @@ export function FormScreen({
             <div className="fieldgrid">
               <Input
                 full
-                label="프로그램 구성"
-                auto={autoFilledFields.programs}
-                hint="하나 이상 선택"
-                error={errors.includes('프로그램 구성')}
+                label="핵심 프로그램"
+                auto={autoFilledFields.programCandidates}
+                hint="후보 중 최대 5개 선택"
               >
-                <div className="chips">
-                  {PROGRAMS.map((p) => (
-                    <label
-                      className={`chk ${plan.programs.includes(p.id) ? 'on' : ''}`}
-                      key={p.id}
+                <div className="program-candidate-list">
+                  <div className="chips">
+                    {programCandidates.map((programName) => {
+                      const selected = programNames.includes(programName)
+                      const disabled = !selected && programNames.length >= MAX_PROGRAM_NAMES
+                      const isCustom = customProgramNames.some(
+                        (candidate) => normalizeProgramName(candidate) === normalizeProgramName(programName),
+                      )
+                      return (
+                        <div
+                          className={`program-candidate-item ${isCustom ? 'custom' : ''} ${selected ? 'on' : ''}`}
+                          key={programName}
+                        >
+                          <label
+                            className={`chk ${selected ? 'on' : ''} ${disabled ? 'disabled' : ''}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              disabled={disabled}
+                              onChange={() => toggleProgram(programName)}
+                            />
+                            {programName}
+                          </label>
+                          {isCustom && (
+                            <button
+                              type="button"
+                              className="program-remove-button"
+                              onClick={() => removeProgramCandidate(programName)}
+                              aria-label={`${programName} 후보 삭제`}
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {!isAddingProgram ? (
+                    <Button
+                      type="button"
+                      small
+                      className="program-add-button"
+                      onClick={() => setIsAddingProgram(true)}
+                      aria-label="핵심 프로그램 후보 추가"
                     >
+                      +
+                    </Button>
+                  ) : (
+                    <div className="program-add-row">
                       <input
-                        type="checkbox"
-                        checked={plan.programs.includes(p.id)}
-                        onChange={() => toggle(p.id)}
+                        type="text"
+                        value={newProgramName}
+                        onChange={(event) => setNewProgramName(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') addProgramCandidate()
+                          if (event.key === 'Escape') {
+                            setNewProgramName('')
+                            setIsAddingProgram(false)
+                          }
+                        }}
+                        placeholder="예: 버스킹 공연"
+                        aria-label="추가할 핵심 프로그램 후보"
+                        autoFocus
                       />
-                      {p.n}
-                    </label>
-                  ))}
+                      <Button type="button" small onClick={addProgramCandidate}>
+                        추가
+                      </Button>
+                      <Button
+                        type="button"
+                        small
+                        onClick={() => {
+                          setNewProgramName('')
+                          setIsAddingProgram(false)
+                        }}
+                      >
+                        취소
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </Input>
             </div>
