@@ -226,10 +226,12 @@ const displayVisitorDecimal = (value) =>
     ? '-'
     : Number(value).toLocaleString('ko-KR', { maximumFractionDigits: 2 })
 
-const displayVisitorPercent = (value) =>
-  value === null || value === undefined || !Number.isFinite(Number(value))
-    ? '-'
-    : `${(Number(value) * 100).toFixed(2)}%`
+const displayVisitorGap = (value) => {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return '-'
+  const gap = Number(value)
+  if (gap === 0) return '목표 방문객은 최근 5회 중앙값과 동일'
+  return `목표 방문객은 최근 5회 중앙값보다 ${(Math.abs(gap) * 100).toFixed(2)}% ${gap < 0 ? '낮음' : '높음'}`
+}
 
 const displaySimilarity = (value) =>
   value === null || value === undefined || !Number.isFinite(Number(value))
@@ -269,6 +271,7 @@ export function getDetailHtml(item, A) {
               last: `목표 ${displayVisitorNumber(target)}`,
             },
           ],
+          { preserveNulls: true },
         )}<p class="vizcap">동일 축제의 연도별 방문객 이력입니다. 값이 없는 연도는 0명이 아니라 데이터 없음으로 표시합니다.</p></div>`
       : `<div class="readbox"><p>동일 축제의 과거 방문 이력이 없습니다.</p></div>`
     const historyTable = historyRows.length
@@ -291,12 +294,12 @@ export function getDetailHtml(item, A) {
       sec(
         1,
         '핵심 지표',
-        `<div class="metricrow c2">${mt('목표 방문객', `${displayVisitorNumber(target)}<small>명</small>`, `${A.days}일 · 일평균 ${displayVisitorNumber(dailyTarget)}명`, true)}${mt('방문객 중앙값', `${displayVisitorNumber(v.median)}<small>명</small>`, 'API visitorMedian')}${mt('중앙값 대비 배수', `${v.ratio === null ? '-' : round1(v.ratio)}<small>배</small>`, v.ratio === null ? '계산 불가' : '목표 방문객 ÷ 방문객 중앙값')}${mt('타당성 점수', `${v.s1 ?? '-'}<small>/100</small>`, 'API score')}</div>`,
+        `<div class="metricrow c2">${mt('목표 방문객', `${displayVisitorNumber(target)}<small>명</small>`, `${A.days}일 · 일평균 ${displayVisitorNumber(dailyTarget)}명`, true)}${mt('방문객 중앙값', `${displayVisitorNumber(v.median)}<small>명</small>`, '최근 개최분 5건 기준')}${mt('중앙값 대비 배수', `${v.ratio === null ? '-' : round1(v.ratio)}<small>배</small>`, v.ratio === null ? '계산 불가' : '목표 방문객 ÷ 최근 5회 중앙값')}${mt('타당성 점수', `${v.s1 ?? '-'}<small>/100</small>`, '흥행 스코어 반영')}</div>`,
       ) +
       sec(
         2,
         '판단 근거 및 데이터',
-        `<p class="vizcap">방문객 데이터 ${v.visitorDataCount ?? '-'}건 · 평균 ${displayVisitorDecimal(v.visitorAverage)}명 · 관측 범위 ${displayVisitorNumber(v.visitorMin)}~${displayVisitorNumber(v.visitorMax)}명 · 전체 유사 축제 ${v.similarFestivalCount ?? '-'}개 · 상세 후보 ${similarRows.length}개 · 유사도 기준 ${displaySimilarity(v.similarityThreshold)} · 중앙값 대비 ${displayVisitorPercent(v.gapRate)}</p>${historyChart}${historyTable}<p class="vizcap" style="margin-top:16px">상위 유사 축제 후보</p>${similarTable}`,
+        `<div class="visitor-meta-groups"><div class="visitor-meta-group"><b>분석 표본</b><span>유사 축제 ${v.similarFestivalCount ?? '-'}개</span><span>방문객 데이터 ${v.visitorDataCount ?? '-'}건</span><span>상세 비교 후보 ${similarRows.length}개</span></div><div class="visitor-meta-group"><b>방문객 분포</b><span>평균 ${displayVisitorDecimal(v.visitorAverage)}명</span><span>범위 ${displayVisitorNumber(v.visitorMin)}명 ~ ${displayVisitorNumber(v.visitorMax)}명</span></div><div class="visitor-meta-group"><b>비교 조건</b><span>유사도 기준 ${displaySimilarity(v.similarityThreshold)}</span><span>${displayVisitorGap(v.gapRate)}</span></div></div>${historyChart}${historyTable}<p class="vizcap" style="margin-top:16px">상위 유사 축제 후보</p>${similarTable}`,
       ) +
       sec(
         3,

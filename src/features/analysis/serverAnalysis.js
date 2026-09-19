@@ -656,6 +656,12 @@ const normalizeTargetSimilarFestival = (rows) =>
       similarityScore: asNumber(row?.similarityScore),
     }))
     .filter((row) => row.festivalName !== '-')
+    .sort((a, b) => {
+      if (a.rank !== null && b.rank !== null) return a.rank - b.rank
+      if (a.rank !== null) return -1
+      if (b.rank !== null) return 1
+      return 0
+    })
 
 const targetHistorySeries = (rows) => {
   const years = [...new Set(rows.map((row) => row.year).filter((year) => year !== null))].sort(
