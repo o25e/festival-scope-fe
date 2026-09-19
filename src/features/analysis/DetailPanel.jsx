@@ -13,6 +13,10 @@ const displayDemandValue = (value) =>
   value === null || value === undefined || !Number.isFinite(Number(value))
     ? '-'
     : Number(value).toLocaleString('ko-KR', { maximumFractionDigits: 2 })
+const displayConflictValue = (value, suffix = '') =>
+  value === null || value === undefined ? '-' : `${value}${suffix}`
+const displayConflictNumber = (value, suffix = '') =>
+  value === null || value === undefined ? '-' : `${fmt(value)}${suffix}`
 const weeklyVisitorData = [
   { label: '10월 1주', range: '10.01 - 10.07', value: 7.8 },
   { label: '10월 2주', range: '10.08 - 10.14', value: 9.2 },
@@ -442,8 +446,9 @@ export function getDetailHtml(item, A) {
     )
   }
   if (item.key === 'overlap') {
-    const sd = dparse(p.start),
-      ed = dparse(p.end),
+    const hasServerConflict = Boolean(A.server?.items?.CONFLICT_RISK?.detail),
+      sd = hasServerConflict ? v.targetPeriodStart : dparse(p.start),
+      ed = hasServerConflict ? v.targetPeriodEnd : dparse(p.end),
       lvName = { direct: '기간 중복', near: '인접(±3일)', watch: '주의(±7일)' },
       overlapRecs = []
     if (v.best && v.best.w < v.nDirect * 3 + v.nNear)
@@ -490,7 +495,7 @@ export function getDetailHtml(item, A) {
         2,
         '판단 근거 및 데이터',
         v.cf.length
-          ? `<div class="vizbox">${gantt(v.cf, sd, ed, p.name || '이번 축제')}<p class="vizcap">진한 막대가 이번 기획안의 개최 기간입니다. 빨간색은 기간이 겹치는 행사, 주황색은 전후 3일 내 인접 행사입니다.</p><div class="legend"><span><i style="background:#12557E"></i>이번 축제</span><span><i style="background:#C2634C"></i>기간 중복</span><span><i style="background:#D8A33F"></i>인접</span><span><i style="background:#B9C7D2"></i>주의 범위</span></div></div><table class="dt" style="margin-top:12px"><tr><th>행사명</th><th>권역</th><th class="n">거리</th><th class="n">규모</th><th>구분</th></tr>${v.cf.map((c) => `<tr class="${c.lv === 'direct' ? 'hit2' : c.lv === 'near' ? 'hit' : ''}"><td><b>${c.n}</b><div style="color:var(--muted);font-size:11px">${dfmt(c.b1)}~${dfmt(c.b2)} · 최근 5년 ${c.held}회</div></td><td style="color:var(--muted)">${c.reg}</td><td class="n">${c.km}km</td><td class="n">${fmt(c.scale)}명</td><td><span class="tagsm ${c.lv === 'direct' ? 'r' : c.lv === 'near' ? 'w' : 'n'}">${lvName[c.lv]}</span></td></tr>`).join('')}</table>`
+          ? `<div class="vizbox">${gantt(v.cf, sd, ed, p.name || '이번 축제')}<p class="vizcap">진한 막대가 이번 기획안의 개최 기간입니다. 빨간색은 기간이 겹치는 행사, 주황색은 전후 3일 내 인접 행사입니다.</p><div class="legend"><span><i style="background:#12557E"></i>이번 축제</span><span><i style="background:#C2634C"></i>기간 중복</span><span><i style="background:#D8A33F"></i>인접</span><span><i style="background:#B9C7D2"></i>주의 범위</span></div></div><table class="dt" style="margin-top:12px"><tr><th>행사명</th><th>권역</th><th class="n">거리</th><th class="n">규모</th><th>구분</th></tr>${v.cf.map((c) => `<tr class="${c.lv === 'direct' ? 'hit2' : c.lv === 'near' ? 'hit' : ''}"><td><b>${c.n}</b><div style="color:var(--muted);font-size:11px">${dfmt(c.b1)}~${dfmt(c.b2)} · 최근 5년 ${displayConflictValue(c.held, '회')}</div></td><td style="color:var(--muted)">${c.reg}</td><td class="n">${displayConflictValue(c.km, 'km')}</td><td class="n">${displayConflictNumber(c.scale, '명')}</td><td><span class="tagsm ${c.lv === 'direct' ? 'r' : c.lv === 'near' ? 'w' : 'n'}">${lvName[c.lv]}</span></td></tr>`).join('')}</table>`
           : `<div class="vizbox"><p class="read" style="font-size:12.5px">반경 80km · ±7일 범위에서 최근 5년 중 3회 이상 반복 개최된 행사가 확인되지 않았습니다.</p></div>`,
       ) +
       sec(

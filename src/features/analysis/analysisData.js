@@ -48,6 +48,7 @@ export function cardData(item, A) {
   const v = A.v
   const content = A.analysisContent?.[item.key] || {}
   const hasServerDemand = Boolean(A.server?.items?.DEMAND_FIT)
+  const hasServerConflict = Boolean(A.server?.items?.CONFLICT_RISK?.detail)
   if (item.key === 'visitor')
     return {
       pill: v.v1,
@@ -111,6 +112,26 @@ export function cardData(item, A) {
       bars: A.R.monthly,
       highlight: eventMonth === null || eventMonth === undefined ? -1 : eventMonth - 1,
       }
+    }
+  if (item.key === 'overlap' && hasServerConflict)
+    return {
+      pill: `위험 ${v.v4 ?? '-'}`,
+      tone:
+        v.v4 === '높음'
+          ? 'r'
+          : v.v4 === '보통'
+            ? 'w'
+            : v.v4 === '낮음' || v.v4 === '없음'
+              ? 'g'
+              : 'w',
+      metric: v.nDirect === null || v.nNear === null ? '-' : v.nDirect + v.nNear,
+      unit: '중복 가능 행사',
+      sub: [
+        ['기간 직접 중복', `${v.nDirect ?? '-'}건`],
+        ['인접 시기 행사', `${v.nNear ?? '-'}건`],
+      ],
+      read: content.summary || '-',
+      bars: [],
     }
   if (item.key === 'overlap')
     return {

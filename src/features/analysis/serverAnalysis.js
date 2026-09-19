@@ -57,6 +57,246 @@ const normalizeAnalysisContent = (detail) => {
   }
 }
 
+const ownValue = (value, keys) => {
+  for (const key of keys) {
+    if (value && Object.prototype.hasOwnProperty.call(value, key)) return value[key]
+  }
+  return undefined
+}
+
+const arrayValue = (value, keys) => {
+  const result = ownValue(value, keys)
+  return Array.isArray(result) ? result : result === undefined ? undefined : []
+}
+
+const conflictPayload = (detail) => {
+  const nested = ['conflictRisk', 'conflictAnalysis', 'overlap', 'conflict'].find(
+    (key) => detail?.[key] && typeof detail[key] === 'object' && !Array.isArray(detail[key]),
+  )
+  return nested ? detail[nested] : detail
+}
+
+const conflictValue = (detail, payload, keys) => {
+  const value = ownValue(detail, keys)
+  return value !== undefined ? value : ownValue(payload, keys)
+}
+
+const parseApiDate = (value) => {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return new Date(value)
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
+  const [year, month, day] = value.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day
+    ? date
+    : null
+}
+
+const normalizeTimelineRange = (startValue, endValue, targetYear) => {
+  const start = parseApiDate(startValue)
+  const end = parseApiDate(endValue)
+  if (!start || !end || !Number.isInteger(targetYear)) return { b1: start, b2: end }
+  const b1 = new Date(targetYear, start.getMonth(), start.getDate())
+  let b2 = new Date(targetYear, end.getMonth(), end.getDate())
+  if (b2 < b1) b2 = new Date(targetYear + 1, end.getMonth(), end.getDate())
+  return { b1, b2 }
+}
+
+const normalizeConflictLevel = (value, fallback = null) => {
+  if (value === null) return null
+  const normalized = String(value ?? '').trim().toUpperCase()
+  return (
+    {
+      DIRECT: 'direct',
+      DIRECT_OVERLAP: 'direct',
+      OVERLAP: 'direct',
+      PERIOD_OVERLAP: 'direct',
+      NEAR: 'near',
+      NEARBY_PERIOD: 'near',
+      ADJACENT: 'near',
+      ADJACENT_PERIOD: 'near',
+      HISTORICAL_SAME_PERIOD: 'watch',
+      WATCH: 'watch',
+      WARNING: 'watch',
+    }[normalized] || (value === '직접 중복' ? 'direct' : value === '인접' ? 'near' : fallback)
+  )
+}
+
+const conflictTypeLabel = (value) =>
+  ({
+    HISTORICAL_SAME_PERIOD: '과거 동일 시기',
+    DIRECT_OVERLAP: '기간 중복',
+    NEARBY_PERIOD: '인접 시기',
+    HISTORICAL: '과거 이력',
+  })[String(value || '').trim().toUpperCase()] || null
+
+const normalizeRiskStatus = (value) => {
+  if (value === null) return null
+  const normalized = String(value ?? '').trim().toUpperCase()
+  return (
+    {
+      HIGH: '높음',
+      MEDIUM: '보통',
+      MODERATE: '보통',
+      LOW: '낮음',
+      NONE: '없음',
+      SAFE: '낮음',
+    }[normalized] || (value === undefined ? '-' : value || '-')
+  )
+}
+
+const normalizeConflictEvent = (row, fallbackLevel = null, targetYear = null) => {
+  const conflictType = firstValue(row, ['conflictType'])
+  const eventBasis = firstValue(row, ['eventBasis'])
+  const region = firstValue(row, ['region', 'hostRegion', 'location', 'locationName', 'area'])
+  const sido = firstValue(row, ['sido'])
+  const sigungu = firstValue(row, ['sigungu'])
+  const typeLabel = conflictTypeLabel(conflictType) || conflictTypeLabel(eventBasis)
+  const startDate = firstValue(row, ['startDate', 'eventStartDate', 'festivalStartDate', 'dateFrom', 'start'])
+  const endDate = firstValue(row, ['endDate', 'eventEndDate', 'festivalEndDate', 'dateTo', 'end'])
+  const timelineRange = normalizeTimelineRange(startDate, endDate, targetYear)
+  const level = normalizeConflictLevel(
+    ownValue(row, ['level', 'conflictLevel', 'overlapType', 'riskType', 'type', 'status', 'conflictType']),
+    fallbackLevel,
+  )
+  return {
+    n: firstValue(row, ['festivalName', 'festivalTitle', 'eventName', 'name', 'title']) || '-',
+    reg: region || [sido, sigungu].filter(Boolean).join(' ') || '-',
+    km: asNumber(firstValue(row, ['distanceKm', 'distance', 'km'])),
+    scale: asNumber(firstValue(row, ['visitorCount', 'visitors', 'scale', 'expectedVisitors', 'capacity'])),
+    held: asNumber(firstValue(row, ['heldCount', 'timesHeld', 'occurrenceCount', 'count'])),
+    b1: timelineRange.b1,
+    b2: timelineRange.b2,
+    startDate,
+    endDate,
+    gap: asNumber(firstValue(row, ['gapDays', 'dateGap', 'gap'])),
+    eventYear: asNumber(firstValue(row, ['eventYear', 'year', 'heldYear'])),
+    eventBasis,
+    conflictType,
+    regionRelation: firstValue(row, ['regionRelation']),
+    sameTheme: firstValue(row, ['sameTheme']),
+    overlapDays: asNumber(firstValue(row, ['overlapDays'])),
+    relation: firstValue(row, ['scheduleRelation', 'overlapRelation', 'relation']) || typeLabel,
+    locationRelation: firstValue(row, ['locationRelation', 'venueRelation']),
+    lv: level,
+  }
+}
+
+const conflictEvents = (detail, targetYear = null) => {
+  const payload = conflictPayload(detail)
+  const directRows = arrayValue(detail, [
+    'directOverlapEvents',
+    'directOverlapFestivals',
+    'directOverlaps',
+    'directConflicts',
+    'periodOverlapEvents',
+    'overlappingEvents',
+  ]) ?? arrayValue(payload, [
+    'directOverlapEvents',
+    'directOverlapFestivals',
+    'directOverlaps',
+    'directConflicts',
+    'periodOverlapEvents',
+    'overlappingEvents',
+  ])
+  const nearRows = arrayValue(detail, [
+    'adjacentEvents',
+    'nearbyEvents',
+    'nearConflicts',
+    'adjacentConflicts',
+    'adjacentOverlapEvents',
+    'nearbyOverlapFestivals',
+    'adjacentOverlaps',
+    'nearbyFestivals',
+  ]) ?? arrayValue(payload, [
+    'adjacentEvents',
+    'nearbyEvents',
+    'nearConflicts',
+    'adjacentConflicts',
+    'adjacentOverlapEvents',
+    'nearbyOverlapFestivals',
+    'adjacentOverlaps',
+    'nearbyFestivals',
+  ])
+  if (directRows !== undefined || nearRows !== undefined) {
+    return [
+      ...(directRows || []).map((row) => normalizeConflictEvent(row, 'direct', targetYear)),
+      ...(nearRows || []).map((row) => normalizeConflictEvent(row, 'near', targetYear)),
+    ]
+  }
+  const rows = arrayValue(detail, ['conflictEvents', 'overlapEvents', 'conflicts', 'events']) ??
+    arrayValue(payload, ['conflictEvents', 'overlapEvents', 'conflicts', 'events'])
+  return rows === undefined ? null : rows.map((row) => normalizeConflictEvent(row, null, targetYear))
+}
+
+const conflictCount = (detail, keys, events, level) => {
+  const explicit = conflictValue(detail, conflictPayload(detail), keys)
+  if (explicit !== undefined) return asNumber(explicit)
+  if (events !== null) return events.filter((event) => event.lv === level).length
+  return null
+}
+
+const normalizeConflictModel = (baseAnalysis, summary, detail) => {
+  const payload = conflictPayload(detail)
+  const historyPeriod = conflictValue(detail, payload, ['historyPeriod'])
+  const targetPeriod = conflictValue(detail, payload, ['targetPeriod'])
+  const targetStartValue = firstValue(targetPeriod, ['startDate'])
+  const targetEndValue = firstValue(targetPeriod, ['endDate'])
+  const targetStart = parseApiDate(targetStartValue)
+  const targetEnd = parseApiDate(targetEndValue)
+  const targetYear = targetStart?.getFullYear() ?? parseApiDate(baseAnalysis?.p?.start)?.getFullYear() ?? null
+  const events = conflictEvents(detail, targetYear)
+  const directEvents = events?.filter((event) => event.lv === 'direct') || []
+  const nearEvents = events?.filter((event) => event.lv === 'near') || []
+  const scoreValue = conflictValue(detail, payload, ['score'])
+  const score = scoreValue !== undefined ? asNumber(scoreValue) : getScore(summary)
+  const statusValue = conflictValue(detail, payload, ['riskLevel', 'riskStatus', 'status', 'risk'])
+  const status = normalizeRiskStatus(statusValue !== undefined ? statusValue : summary?.status)
+  const periodValue = conflictValue(detail, payload, ['analysisPeriod', 'period', 'analyzedPeriod'])
+  const periodObject = periodValue && typeof periodValue === 'object' ? periodValue : null
+  const period = typeof periodValue === 'string' ? periodValue : null
+  const historyStartYear = firstValue(historyPeriod, ['startYear'])
+  const historyEndYear = firstValue(historyPeriod, ['endYear'])
+  const periodStart = firstValue(detail, ['analysisStartDate', 'periodStartDate', 'startDate']) || firstValue(periodObject, ['startDate', 'from', 'start'])
+  const periodEnd = firstValue(detail, ['analysisEndDate', 'periodEndDate', 'endDate']) || firstValue(periodObject, ['endDate', 'to', 'end'])
+  const eventOverlapDays = events?.map((event) => event.overlapDays).filter((value) => value !== null && value !== undefined) || []
+  const explicitOverlapDays = conflictValue(detail, payload, ['overlapDays', 'totalOverlapDays', 'conflictDays'])
+  const overlapDays =
+    explicitOverlapDays !== undefined
+      ? asNumber(explicitOverlapDays)
+      : eventOverlapDays.length === 1
+        ? eventOverlapDays[0]
+        : null
+  return {
+    s4: score,
+    v4: status,
+    nDirect: conflictCount(detail, ['directOverlapCount', 'directOverlapEventCount', 'directConflictCount', 'overlapEventCount'], events, 'direct'),
+    nNear: conflictCount(detail, ['nearbyPeriodCount', 'adjacentEventCount', 'adjacentOverlapEventCount', 'nearbyEventCount', 'nearConflictCount'], events, 'near'),
+    cf: events || [],
+    overlapDays,
+    stayPressure: asNumber(conflictValue(detail, payload, ['stayPressure', 'accommodationPressure'])),
+    rivalStayDemand: asNumber(conflictValue(detail, payload, ['rivalStayDemand', 'competitorStayDemand'])),
+    stayRooms: asNumber(conflictValue(detail, payload, ['stayRooms', 'availableRooms', 'accommodationRooms'])),
+    analysisPeriod:
+      period ||
+      (historyStartYear !== null && historyStartYear !== undefined && historyEndYear !== null && historyEndYear !== undefined
+        ? `${historyStartYear}~${historyEndYear}`
+        : periodStart && periodEnd
+          ? `${periodStart}~${periodEnd}`
+          : null),
+    analysisPeriodStart: periodStart,
+    analysisPeriodEnd: periodEnd,
+    historyPeriod: historyPeriod || null,
+    targetPeriod: targetPeriod || null,
+    targetPeriodStart: targetStart,
+    targetPeriodEnd: targetEnd,
+    historicalSamePeriodCount: asNumber(conflictValue(detail, payload, ['historicalSamePeriodCount'])),
+    sameRegionCount: asNumber(conflictValue(detail, payload, ['sameRegionCount'])),
+    directEvents,
+    nearEvents,
+    best: null,
+  }
+}
+
 const getGrade = (score) => {
   if (score === null) return null
   if (score >= 85) return 'A'
@@ -295,9 +535,13 @@ export const mergeServerAnalysis = (baseAnalysis, summary, details = {}) => {
   const targetSummary = getItem(summary, 'TARGET_VISITOR')
   const trendSummary = getItem(summary, 'TREND_FIT')
   const demandSummary = getItem(summary, 'DEMAND_FIT')
+  const conflictSummary = getItem(summary, 'CONFLICT_RISK')
   const targetDetail = details.TARGET_VISITOR || {}
   const trendDetail = details.TREND_FIT || {}
   const demandDetail = details.DEMAND_FIT || {}
+  const hasConflictDetail = Object.prototype.hasOwnProperty.call(details, 'CONFLICT_RISK') && details.CONFLICT_RISK !== null && details.CONFLICT_RISK !== undefined
+  const conflictDetail = hasConflictDetail ? details.CONFLICT_RISK : null
+  const conflict = hasConflictDetail ? normalizeConflictModel(baseAnalysis, conflictSummary, conflictDetail) : null
   const totalScore = Object.prototype.hasOwnProperty.call(summary || {}, 'totalScore')
     ? asNumber(summary.totalScore)
     : baseAnalysis.composite
@@ -367,7 +611,8 @@ export const mergeServerAnalysis = (baseAnalysis, summary, details = {}) => {
       items: {
         TARGET_VISITOR: targetSummary ? { summary: targetSummary, detail: targetDetail } : null,
         TREND_FIT: trendSummary ? { summary: trendSummary, detail: trendDetail } : null,
-        DEMAND_FIT: demandSummary ? { summary: demandSummary, detail: demandDetail } : null,
+      DEMAND_FIT: demandSummary ? { summary: demandSummary, detail: demandDetail } : null,
+        CONFLICT_RISK: conflictSummary || hasConflictDetail ? { summary: conflictSummary, detail: conflictDetail } : null,
       },
     },
     v: {
@@ -389,6 +634,7 @@ export const mergeServerAnalysis = (baseAnalysis, summary, details = {}) => {
       s2: trendScore === null ? '-' : trendScore,
       v2: trendStatus,
       ...demand.v,
+      ...(conflict || {}),
     },
   }
 }

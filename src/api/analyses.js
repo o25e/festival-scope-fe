@@ -77,6 +77,9 @@ export const getTrendFitAnalysis = (analysisId, options = {}) =>
 export const getDemandFitAnalysis = (analysisId, options = {}) =>
   getAnalysisItem(analysisId, 'DEMAND_FIT', options)
 
+export const getConflictRiskAnalysis = (analysisId, options = {}) =>
+  getAnalysisItem(analysisId, 'CONFLICT_RISK', options)
+
 const normalizePlanId = (planId) => {
   const value = typeof planId === 'string' ? planId.trim() : planId
   if (
