@@ -46,6 +46,8 @@ export const ITEMS = [
 ]
 export function cardData(item, A) {
   const v = A.v
+  const content = A.analysisContent?.[item.key] || {}
+  const hasServerDemand = Boolean(A.server?.items?.DEMAND_FIT)
   if (item.key === 'visitor')
     return {
       pill: v.v1,
@@ -59,11 +61,12 @@ export function cardData(item, A) {
         ['점수', v.s1],
       ],
       read:
-        v.ratio > 1.3
+        content.summary ||
+        (v.ratio > 1.3
           ? `유사 축제 중위값 ${fmt(v.median)}명을 ${round1(v.ratio)}배 웃도는 목표입니다. 예산·인력 산정 근거가 약해질 수 있습니다.`
           : v.ratio < 0.8
             ? '유사 축제 대비 보수적인 목표입니다. 운영 준비 여력은 있으나 사업 규모 설득에 불리할 수 있습니다.'
-            : '유사 축제의 실제 규모 범위 안에 있는 목표입니다.',
+            : '유사 축제의 실제 규모 범위 안에 있는 목표입니다.'),
       bars: [v.median, A.p.target],
     }
   if (item.key === 'trend')
@@ -80,26 +83,34 @@ export function cardData(item, A) {
         ['점수', v.s2],
       ],
       read:
-        v.v2 === '상승'
+        content.summary ||
+        (v.v2 === '상승'
           ? `${A.T.name} 주제의 검색 관심도가 5년 연속 올라 관심 흐름과 방향이 맞습니다.`
           : v.v2 === '유지'
             ? '관심도가 뚜렷한 방향 없이 유지되고 있습니다. 주제만으로는 신규 방문 동인이 약합니다.'
-            : '관심도가 지속 하락 중입니다. 주제 구성을 그대로 두면 신규 유입이 어려울 수 있습니다.',
+            : '관심도가 지속 하락 중입니다. 주제 구성을 그대로 두면 신규 유입이 어려울 수 있습니다.'),
       bars: A.T.series,
     }
   if (item.key === 'demand')
-    return {
+    {
+      const eventMonth = hasServerDemand ? A.R.eventMonth : A.R.eventMonth ?? A.m + 1
+      return {
       pill: v.v3,
       tone: v.v3 === '적합' ? 'g' : v.v3 === '조건부 적합' ? 'w' : 'r',
       metric: v.s3,
       unit: '적합성 점수 / 100',
       sub: [
-        [`${A.m + 1}월 수요`, `지수 ${v.mIdx} (연중 ${v.mRank}위)`],
+        [`${eventMonth ?? '-'}월 수요`, `지수 ${v.mIdx ?? '-'} (연중 ${v.mRank ?? '-'}위)`],
         ['접근성', v.accScore],
       ],
-      read: `개최 월 수요는 연중 ${v.mRank}위로 ${v.mIdx >= 110 ? '유리' : '평이'}하지만, ${v.accScore < 60 ? `행사장 접근성(${v.accScore}점)이 전체 점수를 끌어내립니다.` : '접근성도 무리 없는 수준입니다.'}`,
+      read:
+        hasServerDemand
+          ? content.summary ?? '-'
+          : content.summary ||
+            `개최 월 수요는 연중 ${v.mRank}위로 ${v.mIdx >= 110 ? '유리' : '평이'}하지만, ${v.accScore < 60 ? `행사장 접근성(${v.accScore}점)이 전체 점수를 끌어내립니다.` : '접근성도 무리 없는 수준입니다.'}`,
       bars: A.R.monthly,
-      highlight: A.m,
+      highlight: eventMonth === null || eventMonth === undefined ? -1 : eventMonth - 1,
+      }
     }
   if (item.key === 'overlap')
     return {
@@ -111,11 +122,13 @@ export function cardData(item, A) {
         ['기간 직접 중복', `${v.nDirect}건`],
         ['±3일 인접', `${v.nNear}건`],
       ],
-      read: v.nDirect
-        ? `개최 기간에 반경 60km 내 행사 ${v.nDirect}건이 겹칩니다. 관람객 분산과 숙박 경합이 예상됩니다.`
-        : v.nNear
-          ? `직접 겹치는 행사는 없으나 전후 3일 내 인접 권역 행사가 ${v.nNear}건 있습니다.`
-          : '반경 80km 내에서 같은 시기에 반복 개최되는 행사가 확인되지 않았습니다.',
+      read:
+        content.summary ||
+        (v.nDirect
+          ? `개최 기간에 반경 60km 내 행사 ${v.nDirect}건이 겹칩니다. 관람객 분산과 숙박 경합이 예상됩니다.`
+          : v.nNear
+            ? `직접 겹치는 행사는 없으나 전후 3일 내 인접 권역 행사가 ${v.nNear}건 있습니다.`
+            : '반경 80km 내에서 같은 시기에 반복 개최되는 행사가 확인되지 않았습니다.'),
       bars: [],
     }
   if (item.key === 'weather')
@@ -125,7 +138,9 @@ export function cardData(item, A) {
       metric: `${v.rainP}%`,
       unit: `${A.m + 1}월 동일 시기 강수 발생률`,
       sub: [['기상 취약 프로그램', `${A.progs.filter((x) => x.out || x.wind || x.fog).length}개`]],
-      read: `동일 시기 강수 발생률은 ${v.rainP}%이며, 현재 선택한 핵심 프로그램의 기상 취약도는 ${v.wRisk}점(${v.v5})입니다.`,
+      read:
+        content.summary ||
+        `동일 시기 강수 발생률은 ${v.rainP}%이며, 현재 선택한 핵심 프로그램의 기상 취약도는 ${v.wRisk}점(${v.v5})입니다.`,
       bars: A.R.weather.rainYears,
       highlight: A.m,
     }
@@ -140,7 +155,9 @@ export function cardData(item, A) {
       ['숙박', `${P.r15.stay}곳`],
       ['체류 수용률', `${Math.round(v.stayCov)}%`],
     ],
-    read: `관광지 밀도는 ${v.tourS >= 70 ? '충분' : '보통'}하지만 숙박 수용은 일평균 방문객의 ${Math.round(v.stayCov)}% 수준입니다.`,
+    read:
+      content.summary ||
+      `관광지 밀도는 ${v.tourS >= 70 ? '충분' : '보통'}하지만 숙박 수용은 일평균 방문객의 ${Math.round(v.stayCov)}% 수준입니다.`,
     bars: [],
   }
 }

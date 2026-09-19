@@ -5,6 +5,7 @@ import {
   executeFestivalPlanAnalysis,
   getAnalysis,
   getAnalysisId,
+  getDemandFitAnalysis,
   getTargetVisitorAnalysis,
   getTrendFitAnalysis,
 } from './api/analyses'
@@ -262,13 +263,14 @@ export default function App() {
 
       phase = 'analysis-summary'
       const summary = await getAnalysis(analysisId)
-      const supportedItemTypes = ['TARGET_VISITOR', 'TREND_FIT'].filter((itemType) =>
+      const supportedItemTypes = ['TARGET_VISITOR', 'TREND_FIT', 'DEMAND_FIT'].filter((itemType) =>
         summary?.items?.some((item) => item?.itemType === itemType),
       )
       phase = 'analysis-detail'
       const detailGetters = {
         TARGET_VISITOR: getTargetVisitorAnalysis,
         TREND_FIT: getTrendFitAnalysis,
+        DEMAND_FIT: getDemandFitAnalysis,
       }
       const detailEntries = await Promise.all(
         supportedItemTypes.map(async (itemType) => [
