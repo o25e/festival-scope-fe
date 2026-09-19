@@ -63,6 +63,67 @@ const EMPTY_PLAN = {
   customProgramNames: [],
 }
 
+const LOGIN_INVALID_CREDENTIALS_MESSAGE =
+  '이메일 또는 비밀번호가 올바르지 않습니다.'
+const LOGIN_SERVER_ERROR_MESSAGE =
+  '로그인 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
+const LOGIN_NETWORK_ERROR_MESSAGE = '네트워크 오류가 발생했습니다.'
+const LOGIN_VALIDATION_ERROR_CODE = 'VALIDATION_001'
+const LOGIN_INVALID_CREDENTIALS_ERROR_CODE = 'AUTH_002'
+
+const getLoginErrorCode = (error) => {
+  const candidates = [
+    error?.code,
+    error?.data?.errorCode,
+    error?.data?.error_code,
+    error?.data?.code,
+    error?.data?.error?.errorCode,
+    error?.data?.error?.error_code,
+    error?.data?.error?.code,
+  ]
+
+  const code = candidates.find(
+    (candidate) => typeof candidate === 'string' && candidate.trim(),
+  )
+  return code ? code.trim().toUpperCase().replace(/[\s-]+/g, '_') : null
+}
+
+const getLoginValidationErrorMessage = (error) => {
+  if (getLoginErrorCode(error) !== LOGIN_VALIDATION_ERROR_CODE) return null
+
+  const validationData = error?.data?.data
+  if (validationData && typeof validationData === 'object') {
+    if (Object.prototype.hasOwnProperty.call(validationData, 'email')) {
+      return '올바른 형식의 이메일 주소를 입력해주세요.'
+    }
+    if (Object.prototype.hasOwnProperty.call(validationData, 'password')) {
+      return '비밀번호를 입력해주세요.'
+    }
+  }
+
+  return '입력 정보를 확인해주세요.'
+}
+
+const isInvalidCredentialError = (error) => {
+  const errorCode = getLoginErrorCode(error)
+  return (
+    errorCode === LOGIN_INVALID_CREDENTIALS_ERROR_CODE ||
+    (!errorCode && error?.status === 401)
+  )
+}
+
+const getLoginErrorMessage = (error) => {
+  if (error?.status === 0 && error?.cause) {
+    return LOGIN_NETWORK_ERROR_MESSAGE
+  }
+  const validationErrorMessage = getLoginValidationErrorMessage(error)
+  if (validationErrorMessage) return validationErrorMessage
+  if (isInvalidCredentialError(error)) {
+    return LOGIN_INVALID_CREDENTIALS_MESSAGE
+  }
+  return LOGIN_SERVER_ERROR_MESSAGE
+}
+
 export default function App() {
   const { isAuthenticated, isPending, login, signup, logout } = useAuth()
   const route = useRoute()
@@ -390,7 +451,7 @@ export default function App() {
       setStage('documents')
       navigate('/documents')
     } catch (error) {
-      setLoginError(error?.message || '로그인에 실패했습니다. 입력 정보를 확인해주세요.')
+      setLoginError(getLoginErrorMessage(error))
     }
   }
 
