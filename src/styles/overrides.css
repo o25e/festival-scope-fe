@@ -408,6 +408,20 @@
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+.p-body table.dt.weather-evidence-table {
+  table-layout: fixed;
+}
+.p-body table.dt.weather-evidence-table th:first-child,
+.p-body table.dt.weather-evidence-table td:first-child {
+  width: 30%;
+  min-width: 145px;
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+.p-body table.dt.weather-evidence-table td:nth-child(2) {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
 .p-body table.dt tr.hit td {
   background: #fcf6ea;
 }

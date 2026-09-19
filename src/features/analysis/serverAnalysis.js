@@ -57,6 +57,16 @@ const normalizeAnalysisContent = (detail) => {
   }
 }
 
+const normalizeWeatherContent = (detail) => {
+  const content = normalizeAnalysisContent(detail)
+  if (!detail) return content
+  return {
+    summary: content.summary ?? '-',
+    detail: content.detail ?? '-',
+    recommendations: content.recommendations ?? [],
+  }
+}
+
 const ownValue = (value, keys) => {
   for (const key of keys) {
     if (value && Object.prototype.hasOwnProperty.call(value, key)) return value[key]
@@ -531,14 +541,148 @@ const demandModel = (baseAnalysis, summary, detail) => {
   }
 }
 
+const weatherModel = (baseAnalysis, detail) => {
+  const station = detail?.station && typeof detail.station === 'object' ? detail.station : {}
+  const period =
+    detail?.analysisPeriod && typeof detail.analysisPeriod === 'object'
+      ? detail.analysisPeriod
+      : {}
+  const rain = detail?.rain && typeof detail.rain === 'object' ? detail.rain : {}
+  const temperature =
+    detail?.temperature && typeof detail.temperature === 'object' ? detail.temperature : {}
+  const score = Object.prototype.hasOwnProperty.call(detail || {}, 'score')
+    ? asNumber(detail.score)
+    : null
+  const occurrenceYears = asNumber(rain.occurrenceYears)
+  const rainDays = asNumber(rain.rainDays)
+  const actualYears = asNumber(period.actualYears)
+  const weatherMonthlyRain = Array.isArray(detail?.monthlyRainOccurrenceRates)
+    ? detail.monthlyRainOccurrenceRates.map((row) => asNumber(row?.occurrenceRate))
+    : null
+  const weatherValues = {
+    occurrenceYears,
+    occurrenceRate: asNumber(rain.occurrenceRate),
+    validDays: asNumber(rain.validDays),
+    rainDays,
+    rainDayRate: asNumber(rain.rainDayRate),
+    averageRainfallMm: asNumber(rain.averageRainfallMm),
+    averageTemperature: asNumber(temperature.averageTemperature),
+    averageMaxTemperature: asNumber(temperature.averageMaxTemperature),
+    averageMinTemperature: asNumber(temperature.averageMinTemperature),
+    temperatureValidDays: asNumber(temperature.validDays),
+    hotOccurrenceYears: asNumber(temperature.hotOccurrenceYears),
+    hotOccurrenceRate: asNumber(temperature.hotOccurrenceRate),
+    coldOccurrenceYears: asNumber(temperature.coldOccurrenceYears),
+    coldOccurrenceRate: asNumber(temperature.coldOccurrenceRate),
+    windValidDays: asNumber(detail?.wind?.validDays),
+    averageWindSpeed: asNumber(detail?.wind?.averageWindSpeed),
+    maxWindSpeed: asNumber(detail?.wind?.maxWindSpeed),
+    strongWindOccurrenceYears: asNumber(detail?.wind?.strongWindOccurrenceYears),
+    strongWindOccurrenceRate: asNumber(detail?.wind?.strongWindOccurrenceRate),
+    strongWindDays: asNumber(detail?.wind?.strongWindDays),
+    strongWindDayRate: asNumber(detail?.wind?.strongWindDayRate),
+  }
+
+  const display = (value, suffix = '') =>
+    value === null || value === undefined ? '-' : `${value}${suffix}`
+  const isMissing = (value) => value === null || value === undefined
+  const coldHistory =
+    weatherValues.coldOccurrenceYears === 0 && weatherValues.coldOccurrenceRate === 0
+      ? ''
+      : isMissing(weatherValues.coldOccurrenceYears) && isMissing(weatherValues.coldOccurrenceRate)
+        ? '한파 데이터 없음'
+        : `한파 ${display(weatherValues.coldOccurrenceYears, '년')}(${display(weatherValues.coldOccurrenceRate, '%')})`
+  const strongWindHistory =
+    weatherValues.strongWindOccurrenceYears === 0 && weatherValues.strongWindDays === 0
+      ? `최근 ${display(actualYears, '년')}간 강풍 발생 없음`
+      : isMissing(weatherValues.strongWindOccurrenceYears) &&
+          isMissing(weatherValues.strongWindOccurrenceRate) &&
+          isMissing(weatherValues.strongWindDays) &&
+          isMissing(weatherValues.strongWindDayRate)
+        ? '강풍 발생 데이터 없음'
+        : `강풍 ${display(weatherValues.strongWindOccurrenceYears, '년')}(${display(weatherValues.strongWindOccurrenceRate, '%')}) · 강풍일 ${display(weatherValues.strongWindDays, '일')}(${display(weatherValues.strongWindDayRate, '%')})`
+  const wFlags = [
+    {
+      t: '강수',
+      p: `최근 ${display(actualYears, '년')} 중 ${display(occurrenceYears, '년')}`,
+      d: `최근 ${display(actualYears, '년')} 중 ${display(occurrenceYears, '년')} 강수 발생(${display(weatherValues.occurrenceRate, '%')}) · 관측 ${display(weatherValues.validDays, '일')} 중 강수 ${display(rainDays, '일')}(${display(weatherValues.rainDayRate, '%')}) · 평균 강수량 ${display(weatherValues.averageRainfallMm, 'mm')}`,
+      risk: null,
+      status: null,
+    },
+    {
+      t: '기온',
+      p: `유효 관측일 ${display(weatherValues.temperatureValidDays, '일')}`,
+      d: `평균 ${display(weatherValues.averageTemperature, '℃')} · 최고 ${display(weatherValues.averageMaxTemperature, '℃')} · 최저 ${display(weatherValues.averageMinTemperature, '℃')} · 최근 ${display(actualYears, '년')} 중 고온 ${display(weatherValues.hotOccurrenceYears, '년')}(${display(weatherValues.hotOccurrenceRate, '%')})${coldHistory ? ` · ${coldHistory}` : ''}`,
+      risk: null,
+      status: null,
+    },
+    {
+      t: '강풍',
+      p: `유효 관측일 ${display(weatherValues.windValidDays, '일')}`,
+      d: `평균 풍속 ${display(weatherValues.averageWindSpeed, 'm/s')} · 최대 ${display(weatherValues.maxWindSpeed, 'm/s')} · ${strongWindHistory}`,
+      risk: null,
+      status: null,
+    },
+  ]
+
+  return {
+    R: {
+      ...baseAnalysis.R,
+      weather: {
+        station,
+        analysisPeriod: period,
+        festivalCondition: detail?.festivalCondition || null,
+        weatherMonthlyRain,
+        occurrenceYears,
+        actualYears,
+        ...weatherValues,
+        rainYears: [],
+        heavyYears: [],
+        note: `${display(station.stationId)} · ${station.stationName || '-'}(${display(station.distanceKm, 'km')}) · 요청 ${display(period.requestedYears, '년')} · 실제 ${display(actualYears, '년')} · ${display(period.startYear)}~${display(period.endYear)}년 · 총 ${display(period.totalDays, '일')}${weatherMonthlyRain === null ? ' · 월별 데이터 없음' : ''}`,
+      },
+    },
+    v: {
+      wRisk: score,
+      v5: null,
+      rainP: weatherValues.occurrenceRate,
+      rainOccurrenceYears: occurrenceYears,
+      rainValidDays: weatherValues.validDays,
+      rainDays,
+      rainDayRate: weatherValues.rainDayRate,
+      averageRainfallMm: weatherValues.averageRainfallMm,
+      averageTemperature: weatherValues.averageTemperature,
+      averageMaxTemperature: weatherValues.averageMaxTemperature,
+      averageMinTemperature: weatherValues.averageMinTemperature,
+      temperatureValidDays: weatherValues.temperatureValidDays,
+      hotOccurrenceYears: weatherValues.hotOccurrenceYears,
+      hotOccurrenceRate: weatherValues.hotOccurrenceRate,
+      coldOccurrenceYears: weatherValues.coldOccurrenceYears,
+      coldOccurrenceRate: weatherValues.coldOccurrenceRate,
+      windValidDays: weatherValues.windValidDays,
+      averageWindSpeed: weatherValues.averageWindSpeed,
+      maxWindSpeed: weatherValues.maxWindSpeed,
+      strongWindOccurrenceYears: weatherValues.strongWindOccurrenceYears,
+      strongWindOccurrenceRate: weatherValues.strongWindOccurrenceRate,
+      strongWindDays: weatherValues.strongWindDays,
+      strongWindDayRate: weatherValues.strongWindDayRate,
+      weatherStation: station,
+      weatherAnalysisPeriod: period,
+      wFlags,
+    },
+  }
+}
+
 export const mergeServerAnalysis = (baseAnalysis, summary, details = {}) => {
   const targetSummary = getItem(summary, 'TARGET_VISITOR')
   const trendSummary = getItem(summary, 'TREND_FIT')
   const demandSummary = getItem(summary, 'DEMAND_FIT')
   const conflictSummary = getItem(summary, 'CONFLICT_RISK')
+  const weatherSummary = getItem(summary, 'WEATHER_RISK')
   const targetDetail = details.TARGET_VISITOR || {}
   const trendDetail = details.TREND_FIT || {}
   const demandDetail = details.DEMAND_FIT || {}
+  const hasWeatherDetail = Object.prototype.hasOwnProperty.call(details, 'WEATHER_RISK') && details.WEATHER_RISK !== null && details.WEATHER_RISK !== undefined
+  const weatherDetail = hasWeatherDetail ? details.WEATHER_RISK : null
   const hasConflictDetail = Object.prototype.hasOwnProperty.call(details, 'CONFLICT_RISK') && details.CONFLICT_RISK !== null && details.CONFLICT_RISK !== undefined
   const conflictDetail = hasConflictDetail ? details.CONFLICT_RISK : null
   const conflict = hasConflictDetail ? normalizeConflictModel(baseAnalysis, conflictSummary, conflictDetail) : null
@@ -550,6 +694,9 @@ export const mergeServerAnalysis = (baseAnalysis, summary, details = {}) => {
   const demand = demandSummary
     ? demandModel(baseAnalysis, demandSummary, demandDetail)
     : { R: baseAnalysis.R, v: {} }
+  const weather = hasWeatherDetail
+    ? weatherModel({ ...baseAnalysis, R: demand.R }, weatherDetail)
+    : null
 
   const target = asNumber(targetDetail.targetVisitorCount) ?? baseAnalysis.p.target
   const median = asNumber(targetDetail.visitorMedian)
@@ -591,13 +738,15 @@ export const mergeServerAnalysis = (baseAnalysis, summary, details = {}) => {
     trend: normalizeAnalysisContent(trendDetail),
     demand: normalizeAnalysisContent(demandDetail),
     overlap: normalizeAnalysisContent(details.CONFLICT_RISK),
-    weather: normalizeAnalysisContent(details.WEATHER_RISK),
+    weather: hasWeatherDetail
+      ? normalizeWeatherContent(weatherDetail)
+      : normalizeAnalysisContent(details.WEATHER_RISK),
     link: normalizeAnalysisContent(details.TOURISM_LINKAGE),
   }
 
   return {
     ...baseAnalysis,
-    R: demand.R,
+    R: weather?.R || demand.R,
     T: trendModel,
     composite: totalScore,
     grade: getGrade(totalScore) || baseAnalysis.grade,
@@ -613,6 +762,7 @@ export const mergeServerAnalysis = (baseAnalysis, summary, details = {}) => {
         TREND_FIT: trendSummary ? { summary: trendSummary, detail: trendDetail } : null,
       DEMAND_FIT: demandSummary ? { summary: demandSummary, detail: demandDetail } : null,
         CONFLICT_RISK: conflictSummary || hasConflictDetail ? { summary: conflictSummary, detail: conflictDetail } : null,
+        WEATHER_RISK: weatherSummary || hasWeatherDetail ? { summary: weatherSummary, detail: weatherDetail } : null,
       },
     },
     v: {
@@ -635,6 +785,7 @@ export const mergeServerAnalysis = (baseAnalysis, summary, details = {}) => {
       v2: trendStatus,
       ...demand.v,
       ...(conflict || {}),
+      ...(weather?.v || {}),
     },
   }
 }

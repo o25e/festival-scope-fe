@@ -154,9 +154,9 @@ export function cardData(item, A) {
     }
   if (item.key === 'weather')
     return {
-      pill: `취약도 ${v.v5}`,
+      pill: `취약도 ${v.v5 ?? '-'}`,
       tone: v.v5 === '높음' ? 'r' : v.v5 === '보통' ? 'w' : 'g',
-      metric: `${v.rainP}%`,
+      metric: v.rainP === null || v.rainP === undefined ? '-' : `${v.rainP}%`,
       unit: `${A.m + 1}월 동일 시기 강수 발생률`,
       sub: [['기상 취약 프로그램', `${A.progs.filter((x) => x.out || x.wind || x.fog).length}개`]],
       read:

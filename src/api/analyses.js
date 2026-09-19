@@ -80,6 +80,9 @@ export const getDemandFitAnalysis = (analysisId, options = {}) =>
 export const getConflictRiskAnalysis = (analysisId, options = {}) =>
   getAnalysisItem(analysisId, 'CONFLICT_RISK', options)
 
+export const getWeatherRiskAnalysis = (analysisId, options = {}) =>
+  getAnalysisItem(analysisId, 'WEATHER_RISK', options)
+
 const normalizePlanId = (planId) => {
   const value = typeof planId === 'string' ? planId.trim() : planId
   if (

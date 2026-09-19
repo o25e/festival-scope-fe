@@ -17,6 +17,8 @@ const displayConflictValue = (value, suffix = '') =>
   value === null || value === undefined ? '-' : `${value}${suffix}`
 const displayConflictNumber = (value, suffix = '') =>
   value === null || value === undefined ? '-' : `${fmt(value)}${suffix}`
+const displayWeatherValue = (value, suffix = '') =>
+  value === null || value === undefined || value === '' ? '-' : `${value}${suffix}`
 const weeklyVisitorData = [
   { label: '10월 1주', range: '10.01 - 10.07', value: 7.8 },
   { label: '10월 2주', range: '10.08 - 10.14', value: 9.2 },
@@ -511,9 +513,18 @@ export function getDetailHtml(item, A) {
   }
   if (item.key === 'weather') {
     const W = R.weather
+    const chartValues =
+      Array.isArray(W.weatherMonthlyRain)
+        ? W.weatherMonthlyRain
+        : W.weatherMonthlyRain === null
+          ? []
+          : W.rainYears.map((x) => x * 10)
+    const occurrenceYears =
+      W.occurrenceYears !== undefined ? W.occurrenceYears : W.rainYears[m]
+    const actualYears = W.actualYears !== undefined ? W.actualYears : 10
     const weatherInterpretation = content.detail
       ? `<div class="readbox read"><p>${content.detail}</p></div>`
-      : `<div class="readbox read"><p>${m + 1}월 동일 시기에 강수가 관측된 해는 최근 10년 중 ${W.rainYears[m]}년(${v.rainP}%)입니다. 선택한 핵심 프로그램과 기상 이력을 결합한 행사 기상 취약도는 <strong>${v.wRisk}점(${v.v5})</strong>입니다.</p><p>${
+      : `<div class="readbox read"><p>${m + 1}월 동일 시기에 강수가 관측된 해는 최근 ${displayWeatherValue(actualYears, '년')} 중 ${displayWeatherValue(occurrenceYears, '년')}입니다(${displayWeatherValue(v.rainP, '%')}). 선택한 핵심 프로그램과 기상 이력을 결합한 행사 기상 취약도는 <strong>${displayWeatherValue(v.wRisk)}점(${v.v5 || '-'})</strong>입니다.</p><p>${
           v.wFlags.filter((f) => f.risk).length
             ? `특히 ${v.wFlags
                 .filter((f) => f.risk)
@@ -527,17 +538,12 @@ export function getDetailHtml(item, A) {
       sec(
         1,
         '핵심 지표',
-        `<div class="metricrow c2">${mt('행사 기상 취약도', `${v.wRisk}<small>/100</small>`, '선택 프로그램과 과거 동일 시기 강수 통계 기반', true)}${mt(`${m + 1}월 강수 발생률`, `${v.rainP}<small>%</small>`, `최근 10년 중 ${W.rainYears[m]}년 · 일 10mm 이상 ${W.heavyYears[m]}년`)}</div>`,
+        `<div class="metricrow c2">${mt('행사 기상 취약도', `${displayWeatherValue(v.wRisk)}<small>/100</small>`, '선택 프로그램과 과거 동일 시기 강수 통계 기반', true)}${mt(`${m + 1}월 강수 발생률`, `${displayWeatherValue(v.rainP)}<small>%</small>`, `최근 ${displayWeatherValue(actualYears, '년')} 중 ${displayWeatherValue(occurrenceYears, '년')}`)}</div>`,
       ) +
       sec(
         2,
         '판단 근거 및 데이터',
-        `<div class="vizbox">${vBars(
-          MONTHS,
-          W.rainYears.map((x) => x * 10),
-          m,
-          { h: 130 },
-        )}<p class="vizcap">${R.name} 월별 강수 발생률(최근 10년 중 강수 관측 연수 × 10%). ${W.note}.</p></div><table class="dt" style="margin-top:10px"><tr><th>취약 요소</th><th>발생 이력</th></tr>${v.wFlags.map((f) => `<tr><td><b>${f.t}</b> <span class="tagsm ${f.risk ? 'r' : 'n'}">${f.risk ? '취약' : '해당 없음'}</span><div style="color:var(--muted);font-size:11px;margin-top:2px">${f.p}</div></td><td style="font-size:11.5px">${f.d}</td></tr>`).join('')}</table></div>`,
+        `<div class="vizbox">${vBars(MONTHS, chartValues, m, { h: 130 })}<p class="vizcap">${R.name} 월별 강수 발생률(최근 10년 중 강수 관측 연수 × 10%). ${W.note}.</p></div><table class="dt weather-evidence-table" style="margin-top:10px"><tr><th>취약 요소</th><th>발생 이력</th></tr>${v.wFlags.map((f) => `<tr><td><b>${f.t}</b> <span class="tagsm ${f.status === null ? 'n' : f.risk ? 'r' : 'n'}">${f.status === null ? '-' : f.status ?? (f.risk ? '취약' : '해당 없음')}</span><div style="color:var(--muted);font-size:11px;margin-top:2px">${f.p}</div></td><td style="font-size:11.5px">${f.d}</td></tr>`).join('')}</table></div>`,
       ) +
       sec(
         3,

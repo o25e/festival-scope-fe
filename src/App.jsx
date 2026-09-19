@@ -9,6 +9,7 @@ import {
   getDemandFitAnalysis,
   getTargetVisitorAnalysis,
   getTrendFitAnalysis,
+  getWeatherRiskAnalysis,
 } from './api/analyses'
 import { ApiError } from './api/http'
 import { Header } from './components/AppHeader'
@@ -264,7 +265,7 @@ export default function App() {
 
       phase = 'analysis-summary'
       const summary = await getAnalysis(analysisId)
-      const supportedItemTypes = ['TARGET_VISITOR', 'TREND_FIT', 'DEMAND_FIT', 'CONFLICT_RISK'].filter((itemType) =>
+      const supportedItemTypes = ['TARGET_VISITOR', 'TREND_FIT', 'DEMAND_FIT', 'CONFLICT_RISK', 'WEATHER_RISK'].filter((itemType) =>
         summary?.items?.some((item) => item?.itemType === itemType),
       )
       phase = 'analysis-detail'
@@ -273,6 +274,7 @@ export default function App() {
         TREND_FIT: getTrendFitAnalysis,
         DEMAND_FIT: getDemandFitAnalysis,
         CONFLICT_RISK: getConflictRiskAnalysis,
+        WEATHER_RISK: getWeatherRiskAnalysis,
       }
       const detailEntries = await Promise.all(
         supportedItemTypes.map(async (itemType) => [
