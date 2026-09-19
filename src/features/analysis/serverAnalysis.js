@@ -437,7 +437,6 @@ const visitorSeries = (row) => {
 const visitorRecords = (detail) => {
   const rows = [
     ...(Array.isArray(detail?.sameFestivalHistories) ? detail.sameFestivalHistories : []),
-    ...(Array.isArray(detail?.topSimilarFestivals) ? detail.topSimilarFestivals : []),
   ]
   const grouped = new Map()
 
@@ -482,6 +481,45 @@ const averageSeries = (records, fallback) => {
       ? []
       : YEARS.map(() => fallback)
     : values.map((value) => value ?? fallback)
+}
+
+const normalizeTargetHistory = (rows) =>
+  (Array.isArray(rows) ? rows : [])
+    .map((row) => ({
+      rank: asNumber(row?.rank),
+      festivalId: asNumber(row?.festivalId),
+      festivalHistoryId: asNumber(row?.festivalHistoryId),
+      festivalName: firstValue(row, ['festivalName', 'name', 'title']) || '-',
+      year: asNumber(row?.year),
+      budget: asNumber(row?.budget),
+      visitorCount: asNumber(row?.visitorCount),
+    }))
+    .filter((row) => row.year !== null)
+    .sort((a, b) => a.year - b.year)
+
+const normalizeTargetSimilarFestival = (rows) =>
+  (Array.isArray(rows) ? rows : [])
+    .map((row) => ({
+      rank: asNumber(row?.rank),
+      festivalName: firstValue(row, ['festivalName', 'name', 'title']) || '-',
+      year: asNumber(row?.year),
+      visitorCount: asNumber(row?.visitorCount),
+      themeSimilarity: asNumber(row?.themeSimilarity),
+      regionSimilarity: asNumber(row?.regionSimilarity),
+      periodSimilarity: asNumber(row?.periodSimilarity),
+      similarityScore: asNumber(row?.similarityScore),
+    }))
+    .filter((row) => row.festivalName !== '-')
+
+const targetHistorySeries = (rows) => {
+  const years = [...new Set(rows.map((row) => row.year).filter((year) => year !== null))].sort(
+    (a, b) => a - b,
+  )
+  const byYear = new Map(rows.map((row) => [row.year, row.visitorCount]))
+  return {
+    years,
+    values: years.map((year) => byYear.get(year) ?? null),
+  }
 }
 
 const trendSeries = (values) => {
@@ -766,7 +804,15 @@ export const mergeServerAnalysis = (baseAnalysis, summary, details = {}) => {
   const conflictSummary = getItem(summary, 'CONFLICT_RISK')
   const weatherSummary = getItem(summary, 'WEATHER_RISK')
   const linkageSummary = getItem(summary, 'TOURISM_LINKAGE')
-  const targetDetail = details.TARGET_VISITOR || {}
+  const hasTargetDetail =
+    Object.prototype.hasOwnProperty.call(details, 'TARGET_VISITOR') &&
+    details.TARGET_VISITOR !== null &&
+    details.TARGET_VISITOR !== undefined
+  const targetDetail = hasTargetDetail ? details.TARGET_VISITOR : null
+  const targetVisitor =
+    targetDetail?.targetVisitor && typeof targetDetail.targetVisitor === 'object'
+      ? targetDetail.targetVisitor
+      : null
   const trendDetail = details.TREND_FIT || {}
   const demandDetail = details.DEMAND_FIT || {}
   const hasWeatherDetail = Object.prototype.hasOwnProperty.call(details, 'WEATHER_RISK') && details.WEATHER_RISK !== null && details.WEATHER_RISK !== undefined
@@ -789,25 +835,39 @@ export const mergeServerAnalysis = (baseAnalysis, summary, details = {}) => {
     ? weatherModel({ ...baseAnalysis, R: demand.R }, weatherDetail)
     : null
 
-  const target = asNumber(targetDetail.targetVisitorCount) ?? baseAnalysis.p.target
-  const median = asNumber(targetDetail.visitorMedian)
-  const average = asNumber(targetDetail.visitorAverage)
-  const maximum = asNumber(targetDetail.visitorMax)
-  const records = visitorRecords(targetDetail)
-  const visitorYearAverage = averageSeries(records, average)
-  const ratio = target !== null && median ? target / median : null
-  const visitorTop =
-    maximum ??
-    (records.length
-      ? Math.max(...records.map((row) => row.series[row.series.length - 1]))
-      : null)
-  const simCagr =
-    visitorYearAverage.length > 1 && visitorYearAverage[0]
-      ? Math.pow(
-          visitorYearAverage[visitorYearAverage.length - 1] / visitorYearAverage[0],
-          1 / 4,
-        ) - 1
-      : 0
+  const target = hasTargetDetail
+    ? asNumber(targetVisitor?.targetVisitorCount)
+    : baseAnalysis.p.target
+  const median = hasTargetDetail ? asNumber(targetVisitor?.visitorMedian) : baseAnalysis.v.median
+  const average = hasTargetDetail ? asNumber(targetVisitor?.visitorAverage) : baseAnalysis.v.avg
+  const minimum = hasTargetDetail ? asNumber(targetVisitor?.visitorMin) : null
+  const maximum = hasTargetDetail ? asNumber(targetVisitor?.visitorMax) : baseAnalysis.v.top
+  const gapRate = hasTargetDetail
+    ? asNumber(targetVisitor?.gapRate)
+    : target !== null && median !== null && median !== 0
+      ? target / median - 1
+      : null
+  const similarityThreshold = hasTargetDetail
+    ? asNumber(targetVisitor?.similarityThreshold)
+    : null
+  const similarFestivalCount = hasTargetDetail
+    ? asNumber(targetVisitor?.similarFestivalCount)
+    : null
+  const visitorDataCount = hasTargetDetail ? asNumber(targetVisitor?.visitorDataCount) : null
+  const sameFestivalHistories = hasTargetDetail
+    ? normalizeTargetHistory(targetVisitor?.sameFestivalHistories)
+    : []
+  const topSimilarFestivals = hasTargetDetail
+    ? normalizeTargetSimilarFestival(targetVisitor?.topSimilarFestivals)
+    : []
+  const historySeries = hasTargetDetail
+    ? targetHistorySeries(sameFestivalHistories)
+    : { years: YEARS, values: baseAnalysis.v.yearAvg }
+  const records = hasTargetDetail ? [] : baseAnalysis.v.sims
+  const visitorYearAverage = historySeries.values
+  const ratio = target !== null && median !== null && median !== 0 ? target / median : null
+  const visitorTop = maximum
+  const simCagr = hasTargetDetail ? null : baseAnalysis.v.simCagr
   const targetStatus =
     targetSummary?.status || (ratio === null ? '-' : ratio > 1.3 ? '다소 높음' : '적정 범위')
 
@@ -861,7 +921,20 @@ export const mergeServerAnalysis = (baseAnalysis, summary, details = {}) => {
     v: {
       ...baseAnalysis.v,
       sims: records,
+      targetSource: hasTargetDetail ? 'server' : 'prototype',
+      targetVisitorCount: target,
+      similarFestivalCount,
+      visitorDataCount,
+      visitorAverage: average,
       median,
+      visitorMin: minimum,
+      visitorMax: maximum,
+      gapRate,
+      similarityThreshold,
+      sameFestivalHistories,
+      topSimilarFestivals,
+      sameFestivalYears: historySeries.years,
+      sameFestivalSeries: historySeries.values,
       avg: average,
       top: visitorTop,
       ratio,

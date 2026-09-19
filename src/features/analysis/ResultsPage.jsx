@@ -26,7 +26,10 @@ function MiniBars({ values = [], highlight = null }) {
   )
 }
 function VisitorBars({ values, maxValue }) {
-  const max = maxValue || Math.max(...values, 1)
+  const safeValues = values.map((value) => (Number.isFinite(Number(value)) ? Number(value) : null))
+  const max = Number.isFinite(Number(maxValue)) && Number(maxValue) > 0
+    ? Number(maxValue)
+    : Math.max(...safeValues.filter((value) => value !== null), 1)
   return (
     <svg
       className="spark"
@@ -37,7 +40,7 @@ function VisitorBars({ values, maxValue }) {
       <rect
         x="0"
         y="3"
-        width={(values[0] / max) * 200}
+        width={safeValues[0] === null ? 0 : (safeValues[0] / max) * 200}
         height="9"
         rx="1"
         fill="#CBDCE8"
@@ -45,7 +48,7 @@ function VisitorBars({ values, maxValue }) {
       <rect
         x="0"
         y="17"
-        width={(values[1] / max) * 200}
+        width={safeValues[1] === null ? 0 : (safeValues[1] / max) * 200}
         height="9"
         rx="1"
         fill="#12557E"
@@ -109,7 +112,14 @@ function ResultCard({ item, A, onOpen, selected }) {
       {item.key === 'visitor' && (
         <VisitorBars
           values={d.bars}
-          maxValue={Math.max(A.v.median, A.p.target, A.v.top) * 1.06}
+          maxValue={
+            Math.max(
+              ...[A.v.median, A.v.targetVisitorCount, A.v.top]
+                .filter((value) => Number.isFinite(Number(value)))
+                .map(Number),
+              1,
+            ) * 1.06
+          }
         />
       )}
       {item.key === 'trend' && (

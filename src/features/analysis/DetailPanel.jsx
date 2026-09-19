@@ -88,8 +88,8 @@ function lineChart(labels, series, opt = {}) {
     padR = 12,
     padT = 12,
     padB = 24,
-    all = series.flatMap((s) => s.v),
-    mx = opt.max ?? Math.max(...all) * 1.1,
+    all = series.flatMap((s) => s.v).filter((value) => Number.isFinite(Number(value))),
+    mx = opt.max ?? (all.length ? Math.max(...all) * 1.1 : 1),
     mn = opt.min ?? 0,
     x = (i) => padL + (i * (W - padL - padR)) / (labels.length - 1),
     y = (v) => padT + (1 - (v - mn) / (mx - mn)) * (H - padT - padB)
@@ -99,15 +99,33 @@ function lineChart(labels, series, opt = {}) {
     s += `<line x1="${padL}" y1="${yy}" x2="${W - padR}" y2="${yy}" stroke="#EAF0F4"/><text x="${padL - 6}" y="${yy + 3.5}" text-anchor="end" font-size="9.5" fill="#93A2AF">${fmt(mn + (1 - f) * (mx - mn))}</text>`
   })
   series.forEach((se) => {
-    const pts = se.v.map((v, i) => `${x(i)},${y(v)}`).join(' ')
-    if (se.area)
-      s += `<polygon points="${padL},${y(mn)} ${pts} ${W - padR},${y(mn)}" fill="${se.c}" opacity=".08"/>`
-    s += `<polyline points="${pts}" fill="none" stroke="${se.c}" stroke-width="${se.w || 2}" stroke-dasharray="${se.dash || ''}" stroke-linejoin="round"/>`
-    se.v.forEach((v, i) => {
-      s += `<circle cx="${x(i)}" cy="${y(v)}" r="${se.dash ? 0 : 3}" fill="#fff" stroke="${se.c}" stroke-width="1.6"/>`
+    const valid = se.v
+      .map((value, index) => ({ value: Number(value), index }))
+      .filter((point) => Number.isFinite(point.value))
+    const segments = []
+    let segment = []
+    se.v.forEach((value, index) => {
+      if (Number.isFinite(Number(value))) segment.push(`${x(index)},${y(Number(value))}`)
+      else if (segment.length) {
+        segments.push(segment)
+        segment = []
+      }
     })
-    if (se.last)
-      s += `<text x="${x(se.v.length - 1)}" y="${y(se.v[se.v.length - 1]) - 9}" text-anchor="end" font-size="10.5" font-weight="700" fill="${se.c}">${se.last}</text>`
+    if (segment.length) segments.push(segment)
+    if (se.area && valid.length === se.v.length) {
+      const pts = valid.map((point) => `${x(point.index)},${y(point.value)}`).join(' ')
+      s += `<polygon points="${padL},${y(mn)} ${pts} ${W - padR},${y(mn)}" fill="${se.c}" opacity=".08"/>`
+    }
+    segments.forEach((points) => {
+      if (points.length > 1)
+        s += `<polyline points="${points.join(' ')}" fill="none" stroke="${se.c}" stroke-width="${se.w || 2}" stroke-dasharray="${se.dash || ''}" stroke-linejoin="round"/>`
+    })
+    valid.forEach((point) => {
+      s += `<circle cx="${x(point.index)}" cy="${y(point.value)}" r="${se.dash ? 0 : 3}" fill="#fff" stroke="${se.c}" stroke-width="1.6"/>`
+    })
+    const last = valid[valid.length - 1]
+    if (se.last && last)
+      s += `<text x="${x(last.index)}" y="${y(last.value) - 9}" text-anchor="end" font-size="10.5" font-weight="700" fill="${se.c}">${se.last}</text>`
   })
   labels.forEach((l, i) => {
     s += `<text x="${x(i)}" y="${H - 7}" text-anchor="middle" font-size="9.5" fill="#6C7D8C">${l}</text>`
@@ -194,6 +212,26 @@ function groupBars(groups, colors) {
   return `${s}</svg>`
 }
 
+const displayVisitorNumber = (value) =>
+  value === null || value === undefined || !Number.isFinite(Number(value))
+    ? '-'
+    : fmt(value)
+
+const displayVisitorDecimal = (value) =>
+  value === null || value === undefined || !Number.isFinite(Number(value))
+    ? '-'
+    : Number(value).toLocaleString('ko-KR', { maximumFractionDigits: 2 })
+
+const displayVisitorPercent = (value) =>
+  value === null || value === undefined || !Number.isFinite(Number(value))
+    ? '-'
+    : `${(Number(value) * 100).toFixed(2)}%`
+
+const displaySimilarity = (value) =>
+  value === null || value === undefined || !Number.isFinite(Number(value))
+    ? '-'
+    : `${Number(value).toLocaleString('ko-KR', { maximumFractionDigits: 2 })}%`
+
 export function getDetailHtml(item, A) {
   const v = A.v,
     p = A.p,
@@ -201,6 +239,71 @@ export function getDetailHtml(item, A) {
     T = A.T,
     m = A.m,
     content = A.analysisContent?.[item.key] || {}
+  if (item.key === 'visitor' && v.targetSource === 'server') {
+    const historyRows = Array.isArray(v.sameFestivalHistories) ? v.sameFestivalHistories : []
+    const historyYears = Array.isArray(v.sameFestivalYears) ? v.sameFestivalYears : []
+    const historySeries = Array.isArray(v.sameFestivalSeries) ? v.sameFestivalSeries : []
+    const similarRows = Array.isArray(v.topSimilarFestivals) ? v.topSimilarFestivals : []
+    const target = v.targetVisitorCount
+    const dailyTarget = target === null || target === undefined || !A.days ? null : target / A.days
+    const lastHistoryValue = [...historySeries].reverse().find((value) => value !== null && value !== undefined)
+    const historyChart = historyYears.length
+      ? `<div class="vizbox">${lineChart(
+          historyYears,
+          [
+            {
+              v: historySeries,
+              c: '#12557E',
+              area: true,
+              last: displayVisitorNumber(lastHistoryValue),
+            },
+            {
+              v: historyYears.map(() => target),
+              c: '#C2634C',
+              dash: '4 3',
+              w: 1.6,
+              last: `목표 ${displayVisitorNumber(target)}`,
+            },
+          ],
+        )}<p class="vizcap">동일 축제의 연도별 방문객 이력입니다. 값이 없는 연도는 0명이 아니라 데이터 없음으로 표시합니다.</p></div>`
+      : `<div class="readbox"><p>동일 축제의 과거 방문 이력이 없습니다.</p></div>`
+    const historyTable = historyRows.length
+      ? `<table class="dt" style="margin-top:12px"><tr><th>연도</th><th>방문객 수</th><th>예산</th></tr>${historyRows
+          .map(
+            (row) =>
+              `<tr><td>${row.year ?? '-'}</td><td class="n">${displayVisitorNumber(row.visitorCount)}${row.visitorCount === null ? '' : '명'}</td><td class="n">${displayVisitorDecimal(row.budget)}</td></tr>`,
+          )
+          .join('')}</table>`
+      : ''
+    const similarTable = similarRows.length
+      ? `<table class="dt" style="margin-top:12px"><tr><th>유사 축제</th><th>연도</th><th class="n">방문객 수</th><th class="n">종합 유사도</th></tr>${similarRows
+          .map(
+            (row) =>
+              `<tr><td>${row.festivalName}</td><td>${row.year ?? '-'}</td><td class="n">${displayVisitorNumber(row.visitorCount)}${row.visitorCount === null ? '' : '명'}</td><td class="n"><b>${displaySimilarity(row.similarityScore)}</b><br><small>주제 ${displaySimilarity(row.themeSimilarity)} · 지역 ${displaySimilarity(row.regionSimilarity)} · 시기 ${displaySimilarity(row.periodSimilarity)}</small></td></tr>`,
+          )
+          .join('')}</table>`
+      : `<div class="readbox"><p>상위 유사 축제 목록이 없습니다.</p></div>`
+    return (
+      sec(
+        1,
+        '핵심 지표',
+        `<div class="metricrow c2">${mt('목표 방문객', `${displayVisitorNumber(target)}<small>명</small>`, `${A.days}일 · 일평균 ${displayVisitorNumber(dailyTarget)}명`, true)}${mt('방문객 중앙값', `${displayVisitorNumber(v.median)}<small>명</small>`, 'API visitorMedian')}${mt('중앙값 대비 배수', `${v.ratio === null ? '-' : round1(v.ratio)}<small>배</small>`, v.ratio === null ? '계산 불가' : '목표 방문객 ÷ 방문객 중앙값')}${mt('타당성 점수', `${v.s1 ?? '-'}<small>/100</small>`, 'API score')}</div>`,
+      ) +
+      sec(
+        2,
+        '판단 근거 및 데이터',
+        `<p class="vizcap">방문객 데이터 ${v.visitorDataCount ?? '-'}건 · 평균 ${displayVisitorDecimal(v.visitorAverage)}명 · 관측 범위 ${displayVisitorNumber(v.visitorMin)}~${displayVisitorNumber(v.visitorMax)}명 · 전체 유사 축제 ${v.similarFestivalCount ?? '-'}개 · 상세 후보 ${similarRows.length}개 · 유사도 기준 ${displaySimilarity(v.similarityThreshold)} · 중앙값 대비 ${displayVisitorPercent(v.gapRate)}</p>${historyChart}${historyTable}<p class="vizcap" style="margin-top:16px">상위 유사 축제 후보</p>${similarTable}`,
+      ) +
+      sec(
+        3,
+        '결과 해석',
+        content.detail
+          ? `<div class="readbox read"><p>${content.detail}</p></div>`
+          : `<div class="readbox read"><p>방문객 중앙값 ${displayVisitorNumber(v.median)}명 기준 목표는 ${v.ratio === null ? '-' : `${round1(v.ratio)}배`}입니다.</p></div>`,
+      ) +
+      sec(4, '권장 수정사항', recs(content.recommendations || []))
+    )
+  }
   if (item.key === 'visitor') {
     const rows = v.sims.map((s) => ({
       n: s.n.length > 12 ? `${s.n.slice(0, 11)}…` : s.n,

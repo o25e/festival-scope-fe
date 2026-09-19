@@ -49,6 +49,34 @@ export function cardData(item, A) {
   const content = A.analysisContent?.[item.key] || {}
   const hasServerDemand = Boolean(A.server?.items?.DEMAND_FIT)
   const hasServerConflict = Boolean(A.server?.items?.CONFLICT_RISK?.detail)
+  if (item.key === 'visitor' && v.targetSource === 'server') {
+    const displayNumber = (value) =>
+      value === null || value === undefined || !Number.isFinite(Number(value))
+        ? '-'
+        : fmt(value)
+    const ratioLabel = v.ratio === null ? '-' : `${round1(v.ratio)}배`
+    return {
+      pill: v.v1,
+      tone: v.ratio === null ? 'w' : v.ratio > 1.6 || v.ratio < 0.5 ? 'r' : 'g',
+      metric: ratioLabel,
+      unit: '방문객 중앙값 대비',
+      sub: [
+        ['목표', `${displayNumber(v.targetVisitorCount)}명`],
+        ['중앙값', `${displayNumber(v.median)}명`],
+        ['점수', v.s1 ?? '-'],
+      ],
+      read:
+        content.summary ||
+        (v.ratio === null
+          ? '방문객 중앙값을 확인할 수 없어 배수를 계산할 수 없습니다.'
+          : v.ratio > 1.3
+            ? `방문객 중앙값 ${displayNumber(v.median)}명보다 높은 목표입니다.`
+            : v.ratio < 0.8
+              ? `방문객 중앙값 ${displayNumber(v.median)}명보다 보수적인 목표입니다.`
+              : '방문객 중앙값을 기준으로 적정 범위의 목표입니다.'),
+      bars: [v.median, v.targetVisitorCount],
+    }
+  }
   if (item.key === 'visitor')
     return {
       pill: v.v1,
