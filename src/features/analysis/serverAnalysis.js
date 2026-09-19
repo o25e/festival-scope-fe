@@ -522,35 +522,101 @@ const targetHistorySeries = (rows) => {
   }
 }
 
-const trendSeries = (values) => {
+const normalizeTrendInterest = (values) => {
   if (!Array.isArray(values)) return []
-  return toFivePointSeries(
-    values
-      .slice()
-      .sort((a, b) => (a?.year ?? 0) - (b?.year ?? 0))
-      .map((entry) => (typeof entry === 'object' ? firstValue(entry, ['interest', 'value']) : entry)),
-  )
+  return values
+    .slice()
+    .sort((a, b) => {
+      const aYear = asNumber(a?.year)
+      const bYear = asNumber(b?.year)
+      if (aYear === null && bYear === null) return 0
+      if (aYear === null) return 1
+      if (bYear === null) return -1
+      return aYear - bYear
+    })
+    .map((entry) => ({
+      year: asNumber(entry?.year),
+      interest: asNumber(firstValue(entry, ['interest', 'value'])),
+    }))
 }
 
-const trendRate = (value, series) => {
-  const explicit = asNumber(value)
-  if (explicit !== null) return Math.abs(explicit) > 1 ? explicit / 100 : explicit
-  if (series.length < 2 || series[0] === 0) return null
-  return Math.pow(series[series.length - 1] / series[0], 1 / 4) - 1
+const normalizeTrendGrowthRates = (values) => {
+  if (!Array.isArray(values)) return []
+  return values
+    .slice()
+    .sort((a, b) => {
+      const aYear = asNumber(a?.toYear)
+      const bYear = asNumber(b?.toYear)
+      if (aYear === null && bYear === null) return 0
+      if (aYear === null) return 1
+      if (bYear === null) return -1
+      return aYear - bYear
+    })
+    .map((entry) => ({
+      fromYear: asNumber(entry?.fromYear),
+      toYear: asNumber(entry?.toYear),
+      rate: asNumber(entry?.rate),
+    }))
+}
+
+const trendCagr = (points) => {
+  if (!Array.isArray(points) || points.length < 2) return null
+  const first = points[0]
+  const latest = points[points.length - 1]
+  if (first?.interest === null || latest?.interest === null || first?.interest === 0) return null
+  const periods =
+    first.year !== null && latest.year !== null
+      ? latest.year - first.year
+      : points.length - 1
+  if (periods <= 0) return null
+  const value = Math.pow(latest.interest / first.interest, 1 / periods) - 1
+  return Number.isFinite(value) ? value : null
+}
+
+const trendDirectionFromInterestChange = (points) => {
+  if (!Array.isArray(points) || points.length < 2) return '-'
+  const first = points[0]?.interest
+  const latest = points[points.length - 1]?.interest
+  if (first === null || latest === null) return '-'
+  const change = latest - first
+  return change > 12 ? '상승' : change < -12 ? '하락' : '유지'
+}
+
+const normalizePreviousYearAroundEventPeriod = (values) => {
+  if (!Array.isArray(values)) return []
+  return values.map((entry) => ({
+    keyword: firstValue(entry, ['keyword', 'name', 'title']) || null,
+    monthlyInterest: Array.isArray(entry?.monthlyInterest)
+      ? entry.monthlyInterest.map((row) => ({
+          month: row?.month ?? null,
+          interest: asNumber(row?.interest),
+        }))
+      : [],
+  }))
 }
 
 const trendDetails = (detail) => {
   const keywords = Array.isArray(detail?.keywords) ? detail.keywords : []
   return keywords
     .map((keyword) => {
-      const series = trendSeries(keyword?.yearlyInterest)
-      const rate = trendRate(keyword?.yearlyGrowthRate, series)
-      const change = series.length > 1 ? series[series.length - 1] - series[0] : 0
+      const yearlyInterest = normalizeTrendInterest(keyword?.yearlyInterest)
+      const yearlyGrowthRate = normalizeTrendGrowthRates(keyword?.yearlyGrowthRate)
       return {
         k: firstValue(keyword, ['keyword', 'name', 'title']) || '-',
-        v: series,
-        d: change > 12 ? '상승' : change < -12 ? '하락' : '유지',
-        rate,
+        v: yearlyInterest.map((point) => point.interest),
+        years: yearlyInterest.map((point) => point.year),
+        yearlyInterest,
+        yearlyGrowthRate,
+        firstYear: yearlyInterest[0]?.year ?? null,
+        latestYear: yearlyInterest[yearlyInterest.length - 1]?.year ?? null,
+        firstInterest: yearlyInterest[0]?.interest ?? null,
+        latestInterest: yearlyInterest[yearlyInterest.length - 1]?.interest ?? null,
+        latestGrowthRate:
+          yearlyGrowthRate.length > 0
+            ? yearlyGrowthRate[yearlyGrowthRate.length - 1].rate
+            : null,
+        d: trendDirectionFromInterestChange(yearlyInterest),
+        cagr: trendCagr(yearlyInterest),
       }
     })
     .filter((keyword) => keyword.v.length)
@@ -872,15 +938,33 @@ export const mergeServerAnalysis = (baseAnalysis, summary, details = {}) => {
     targetSummary?.status || (ratio === null ? '-' : ratio > 1.3 ? '다소 높음' : '적정 범위')
 
   const integratedTrend = trendDetail.integratedTrend || {}
-  const series = trendSeries(integratedTrend.yearlyInterest)
-  const trendRateValue = trendRate(integratedTrend.yearlyGrowthRate, series)
+  const yearlyInterest = normalizeTrendInterest(integratedTrend.yearlyInterest)
+  const yearlyGrowthRate = normalizeTrendGrowthRates(integratedTrend.yearlyGrowthRate)
+  const series = yearlyInterest.map((point) => point.interest)
+  const years = yearlyInterest.map((point) => point.year)
+  const trendCagrValue = trendCagr(yearlyInterest)
+  const latestGrowthRate =
+    yearlyGrowthRate.length > 0
+      ? yearlyGrowthRate[yearlyGrowthRate.length - 1].rate
+      : null
   const trendDetailRows = trendDetails(trendDetail)
   const trendStatus =
     trendSummary?.status ||
-    (trendRateValue === null ? '-' : trendRateValue > 0.06 ? '상승' : trendRateValue > -0.03 ? '유지' : '하락')
+    (trendCagrValue === null ? '-' : trendCagrValue > 0.06 ? '상승' : trendCagrValue > -0.03 ? '유지' : '하락')
   const trendModel = {
     ...baseAnalysis.T,
+    years,
     series,
+    yearlyInterest,
+    yearlyGrowthRate,
+    firstYear: years[0] ?? null,
+    latestYear: years[years.length - 1] ?? null,
+    firstInterest: series[0] ?? null,
+    latestInterest: series[series.length - 1] ?? null,
+    latestGrowthRate,
+    previousYearAroundEventPeriod: normalizePreviousYearAroundEventPeriod(
+      trendDetail.previousYearAroundEventPeriod,
+    ),
     detail: trendDetailRows,
     kw: trendDetailRows.map((row) => row.k).join(', '),
   }
@@ -946,7 +1030,7 @@ export const mergeServerAnalysis = (baseAnalysis, summary, details = {}) => {
         first: median === null ? null : Math.round((median * 1.1) / 5000) * 5000,
         stretch: visitorTop === null ? null : Math.round((visitorTop * 1.15) / 5000) * 5000,
       },
-      tCagr: trendRateValue,
+      tCagr: trendCagrValue,
       s2: trendScore === null ? '-' : trendScore,
       v2: trendStatus,
       ...demand.v,

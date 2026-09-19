@@ -1,3 +1,4 @@
+import { YEARS } from '../../data/prototype'
 import { fmt, round1 } from '../../utils/formatters'
 
 export const ITEMS = [
@@ -97,29 +98,51 @@ export function cardData(item, A) {
             ? '유사 축제 대비 보수적인 목표입니다. 운영 준비 여력은 있으나 사업 규모 설득에 불리할 수 있습니다.'
             : '유사 축제의 실제 규모 범위 안에 있는 목표입니다.'),
       bars: [v.median, A.p.target],
+  }
+  if (item.key === 'trend') {
+    const hasServerTrend = Boolean(A.server?.items?.TREND_FIT)
+    const trendYears = hasServerTrend
+      ? Array.isArray(A.T?.years)
+        ? A.T.years
+        : []
+      : Array.isArray(A.T?.years) && A.T.years.length
+        ? A.T.years
+        : YEARS
+    const latestIndex = Array.isArray(A.T?.series) ? A.T.series.length - 1 : -1
+    const latestInterest =
+      A.T?.latestInterest !== undefined ? A.T.latestInterest : A.T?.series?.[latestIndex]
+    const latestYear = A.T?.latestYear !== undefined ? A.T.latestYear : trendYears[latestIndex]
+    const firstYear = A.T?.firstYear !== undefined ? A.T.firstYear : trendYears[0]
+    const cagrPeriods =
+      Number.isFinite(Number(firstYear)) && Number.isFinite(Number(latestYear))
+        ? Math.max(0, Number(latestYear) - Number(firstYear))
+        : null
+    const displayValue = (value) =>
+      value === null || value === undefined || !Number.isFinite(Number(value)) ? '-' : value
+    const displayRate = (value) => {
+      if (value === null || value === undefined || !Number.isFinite(Number(value))) return '-'
+      return `${value > 0 ? '+' : ''}${(value * 100).toFixed(1)}%/년`
     }
-  if (item.key === 'trend')
+    const periodLabel = cagrPeriods === null ? '연평균 증감률' : `최근 ${cagrPeriods}년 CAGR`
     return {
       pill: v.v2,
       tone: v.v2 === '상승' ? 'g' : v.v2 === '유지' ? 'w' : 'r',
-      metric: A.T.series[4],
-      unit: '관심도 지수 (2026)',
+      metric: displayValue(latestInterest),
+      unit: `관심도 지수 (${latestYear ?? '-'})`,
       sub: [
-        [
-          '5년 추이',
-          `${v.tCagr > 0 ? '+' : ''}${(v.tCagr * 100).toFixed(1)}%/년`,
-        ],
+        [periodLabel, displayRate(v.tCagr)],
         ['점수', v.s2],
       ],
       read:
         content.summary ||
         (v.v2 === '상승'
-          ? `${A.T.name} 주제의 검색 관심도가 5년 연속 올라 관심 흐름과 방향이 맞습니다.`
+          ? `${A.T.name} 주제의 검색 관심도가 상승해 관심 흐름과 방향이 맞습니다.`
           : v.v2 === '유지'
             ? '관심도가 뚜렷한 방향 없이 유지되고 있습니다. 주제만으로는 신규 방문 동인이 약합니다.'
             : '관심도가 지속 하락 중입니다. 주제 구성을 그대로 두면 신규 유입이 어려울 수 있습니다.'),
       bars: A.T.series,
     }
+  }
   if (item.key === 'demand')
     {
       const eventMonth = hasServerDemand ? A.R.eventMonth : A.R.eventMonth ?? A.m + 1

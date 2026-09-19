@@ -88,10 +88,14 @@ function lineChart(labels, series, opt = {}) {
     padR = 12,
     padT = 12,
     padB = 24,
-    all = series.flatMap((s) => s.v).filter((value) => Number.isFinite(Number(value))),
+    isValue = (value) =>
+      opt.preserveNulls
+        ? value !== null && value !== undefined && Number.isFinite(Number(value))
+        : Number.isFinite(Number(value)),
+    all = series.flatMap((s) => s.v).filter(isValue),
     mx = opt.max ?? (all.length ? Math.max(...all) * 1.1 : 1),
     mn = opt.min ?? 0,
-    x = (i) => padL + (i * (W - padL - padR)) / (labels.length - 1),
+    x = (i) => padL + (i * (W - padL - padR)) / Math.max(labels.length - 1, 1),
     y = (v) => padT + (1 - (v - mn) / (mx - mn)) * (H - padT - padB)
   let s = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px" role="img">`
   ;[0, 0.5, 1].forEach((f) => {
@@ -101,11 +105,11 @@ function lineChart(labels, series, opt = {}) {
   series.forEach((se) => {
     const valid = se.v
       .map((value, index) => ({ value: Number(value), index }))
-      .filter((point) => Number.isFinite(point.value))
+      .filter((point, index) => isValue(se.v[index]))
     const segments = []
     let segment = []
     se.v.forEach((value, index) => {
-      if (Number.isFinite(Number(value))) segment.push(`${x(index)},${y(Number(value))}`)
+      if (isValue(value)) segment.push(`${x(index)},${y(Number(value))}`)
       else if (segment.length) {
         segments.push(segment)
         segment = []
@@ -372,25 +376,70 @@ export function getDetailHtml(item, A) {
     )
   }
   if (item.key === 'trend') {
-    const rise = T.detail.filter((d) => d.v[4] - d.v[0] > 12),
-      fall = T.detail.filter((d) => d.v[4] - d.v[0] < -12)
+    const hasServerTrend = Boolean(A.server?.items?.TREND_FIT)
+    const trendYears = hasServerTrend
+      ? Array.isArray(T.years)
+        ? T.years
+        : []
+      : Array.isArray(T.years) && T.years.length
+        ? T.years
+        : YEARS
+    const trendValues = Array.isArray(T.series) ? T.series : []
+    const firstYear = T.firstYear ?? trendYears[0] ?? '-'
+    const latestYear = T.latestYear ?? trendYears[trendValues.length - 1] ?? '-'
+    const firstInterest = T.firstInterest ?? trendValues[0] ?? null
+    const latestInterest =
+      T.latestInterest !== undefined
+        ? T.latestInterest
+        : trendValues[trendValues.length - 1] ?? null
+    const displayInterest = (value) =>
+      value === null || value === undefined || !Number.isFinite(Number(value)) ? '-' : value
+    const endpointChange =
+      firstInterest === null ||
+      latestInterest === null ||
+      firstInterest === 0 ||
+      !Number.isFinite(Number(firstInterest)) ||
+      !Number.isFinite(Number(latestInterest))
+        ? '-'
+        : `${latestInterest >= firstInterest ? '+' : ''}${Math.round((latestInterest / firstInterest - 1) * 100)}%`
+    const displayCagr =
+      v.tCagr === null || v.tCagr === undefined || !Number.isFinite(Number(v.tCagr))
+        ? '-'
+        : `${v.tCagr > 0 ? '+' : ''}${(v.tCagr * 100).toFixed(1)}<small>%</small>`
+    const displayCagrText =
+      v.tCagr === null || v.tCagr === undefined || !Number.isFinite(Number(v.tCagr))
+        ? '-'
+        : `${v.tCagr > 0 ? '+' : ''}${(v.tCagr * 100).toFixed(1)}%`
+    const interestChangePercent = (row) => {
+      if (
+        row.firstInterest === null ||
+        row.latestInterest === null ||
+        row.firstInterest === 0 ||
+        !Number.isFinite(Number(row.firstInterest)) ||
+        !Number.isFinite(Number(row.latestInterest))
+      )
+        return null
+      return Math.round((row.latestInterest / row.firstInterest - 1) * 100)
+    }
+    const rise = T.detail.filter((d) => d.d === '상승')
+    const fall = T.detail.filter((d) => d.d === '하락')
     return (
       sec(
         1,
         '핵심 지표',
-        `<div class="metricrow c3">${mt('2026 관심도 지수', T.series[4], `2022년 대비 ${T.series[4] >= T.series[0] ? '+' : ''}${Math.round((T.series[4] / T.series[0] - 1) * 100)}%`, true)}${mt('연평균 증감률', `${v.tCagr > 0 ? '+' : ''}${(v.tCagr * 100).toFixed(1)}<small>%</small>`, '최근 4년')}${mt('추이 판단', v.v2, `${v.s2}점 / 100`)}</div>`,
+        `<div class="metricrow c3">${mt(`${latestYear} 관심도 지수`, displayInterest(latestInterest), `${firstYear}년 대비 ${endpointChange}`, true)}${mt('연평균 증감률', displayCagr, `${firstYear}~${latestYear}년 CAGR`)}${mt('추이 판단', v.v2, `${v.s2}점 / 100`)}</div>`,
       ) +
       sec(
         2,
         '판단 근거 및 데이터',
-        `<div class="vizbox">${lineChart(YEARS, [{ v: T.series, c: v.v2 === '하락' ? '#C2634C' : '#12557E', area: true, last: T.series[4] }], { max: 110 })}<p class="vizcap">주제 키워드군(${T.kw})의 통합 검색 관심도. 최댓값 100 기준 상대 지수입니다.</p></div><table class="dt" style="margin-top:12px"><tr><th>세부 키워드</th><th class="n">2022</th><th class="n">2026</th><th>추이</th></tr>${T.detail.map((d) => `<tr><td>${d.k}</td><td class="n" style="color:var(--muted)">${d.v[0]}</td><td class="n"><b>${d.v[4]}</b></td><td><span class="tagsm ${d.v[4] - d.v[0] > 12 ? 'g' : d.v[4] - d.v[0] < -12 ? 'r' : 'n'}">${d.d}</span></td></tr>`).join('')}</table><p class="vizcap" style="margin-top:9px">핵심 프로그램에 포함된 요소별로 관심 흐름이 다릅니다. 같은 주제 안에서도 상승 키워드와 하락 키워드를 구분해 배치 비중을 정하는 근거로 사용합니다.</p>`,
+        `<div class="vizbox">${lineChart(trendYears, [{ v: trendValues, c: v.v2 === '하락' ? '#C2634C' : '#12557E', area: true, last: latestInterest === null ? null : displayInterest(latestInterest) }], { max: 110, preserveNulls: true })}<p class="vizcap">주제 키워드군(${T.kw})의 통합 검색 관심도. 최댓값 100 기준 상대 지수입니다.</p></div><table class="dt" style="margin-top:12px"><tr><th>세부 키워드</th><th class="n">${firstYear}</th><th class="n">${latestYear}</th><th>추이</th></tr>${T.detail.map((d) => `<tr><td>${d.k}</td><td class="n" style="color:var(--muted)">${displayInterest(d.firstInterest)}</td><td class="n"><b>${displayInterest(d.latestInterest)}</b></td><td><span class="tagsm ${d.d === '상승' ? 'g' : d.d === '하락' ? 'r' : 'n'}">${d.d}</span></td></tr>`).join('')}</table><p class="vizcap" style="margin-top:9px">핵심 프로그램에 포함된 요소별로 관심 흐름이 다릅니다. 같은 주제 안에서도 상승 키워드와 하락 키워드를 구분해 배치 비중을 정하는 근거로 사용합니다.</p>`,
       ) +
       sec(
         3,
         '결과 해석',
         content.detail
           ? `<div class="readbox read"><p>${content.detail}</p></div>`
-          : `<div class="readbox read"><p>${T.name} 주제는 최근 4년간 연평균 ${(v.tCagr * 100).toFixed(1)}% ${v.tCagr > 0 ? '상승' : '하락'}해 <strong>${v.v2}</strong> 흐름으로 판단했습니다.</p><p>${rise.length ? `세부 키워드 중 ${rise.map((d) => d.k).join(', ')}이(가) 상승 폭이 큽니다. ` : ''}${fall.length ? `반대로 ${fall.map((d) => d.k).join(', ')}은(는) 하락 구간에 들어섰습니다. ` : ''}${rise.some((d) => d.d.includes('확산')) ? '다만 급상승 키워드는 전국 도입이 빠르게 늘어 차별화 효과가 줄어드는 구간입니다.' : !rise.length && !fall.length ? '세부 키워드 간 편차는 크지 않습니다.' : ''}</p></div>`,
+          : `<div class="readbox read"><p>${T.name} 주제는 최근 ${firstYear}~${latestYear}년 연평균 ${displayCagrText} ${v.tCagr === null || v.tCagr === undefined ? '증감률을 계산할 수 없어' : v.tCagr > 0 ? '상승해' : '하락해'} <strong>${v.v2}</strong> 흐름으로 판단했습니다.</p><p>${rise.length ? `세부 키워드 중 ${rise.map((d) => d.k).join(', ')}이(가) 상승 폭이 큽니다. ` : ''}${fall.length ? `반대로 ${fall.map((d) => d.k).join(', ')}은(는) 하락 구간에 들어섰습니다. ` : ''}${rise.some((d) => d.d.includes('확산')) ? '다만 급상승 키워드는 전국 도입이 빠르게 늘어 차별화 효과가 줄어드는 구간입니다.' : !rise.length && !fall.length ? '세부 키워드 간 편차는 크지 않습니다.' : ''}</p></div>`,
       ) +
       sec(
         4,
@@ -399,7 +448,7 @@ export function getDetailHtml(item, A) {
           ...rise.slice(0, 1).map((d) => ({
             p: 2,
             t: `${d.k}을(를) 대표 프로그램으로 전면 배치`,
-            d: `4년간 ${Math.round((d.v[4] / d.v[0] - 1) * 100)}% 상승한 키워드입니다. 홍보 문구와 대표 이미지의 기준을 이 요소로 맞추면 검색 유입과 기획 내용이 일치합니다.`,
+            d: `${interestChangePercent(d) === null ? '관심도 변화율을 계산할 수 없는' : `${Math.abs(interestChangePercent(d))}% 상승한`} 키워드입니다. 홍보 문구와 대표 이미지의 기준을 이 요소로 맞추면 검색 유입과 기획 내용이 일치합니다.`,
           })),
           ...T.detail
             .filter((d) => d.d.includes('확산'))
@@ -409,9 +458,9 @@ export function getDetailHtml(item, A) {
               d: '전국 도입이 빠르게 늘어 단독 홍보 포인트로는 변별력이 낮습니다. 예산 비중을 줄이고 대표 프로그램의 보조 연출로 배치하는 편이 효율적입니다.',
             })),
           ...fall.slice(0, 1).map((d) => ({
-            p: d.v[4] < 60 ? 1 : 3,
+            p: d.latestInterest !== null && d.latestInterest < 60 ? 1 : 3,
             t: `${d.k} 비중 축소 검토`,
-            d: `관심도가 ${Math.round((1 - d.v[4] / d.v[0]) * 100)}% 감소했습니다. 유지하려면 체험형·야간형으로 형식을 바꾸는 전제가 필요합니다.`,
+            d: `${interestChangePercent(d) === null ? '관심도 변화율을 계산할 수 없습니다' : `관심도가 ${Math.abs(interestChangePercent(d))}% 감소했습니다`}. 유지하려면 체험형·야간형으로 형식을 바꾸는 전제가 필요합니다.`,
           })),
           {
             p: 3,
