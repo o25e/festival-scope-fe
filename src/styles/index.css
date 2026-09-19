@@ -153,15 +153,6 @@ select:focus-visible {
 .topbar-right {
   margin-left: auto;
 }
-.mockbadge {
-  font-size: 11px;
-  color: var(--muted);
-  background: var(--paper);
-  border: 1px solid var(--line);
-  padding: 4px 9px;
-  border-radius: 99px;
-  white-space: nowrap;
-}
 .screen {
   display: block;
 }
@@ -1250,8 +1241,7 @@ select:focus-visible {
   .topbar {
     padding: 0 16px;
   }
-  .brand em,
-  .mockbadge {
+  .brand em {
     display: none;
   }
   .flow {

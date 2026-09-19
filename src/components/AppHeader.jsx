@@ -90,7 +90,6 @@ export function Header({
         <button className="btn btn-sm" type="button" onClick={onLogout} disabled={isPending}>
           로그아웃
         </button>
-        <span className="mockbadge">예시 데이터로 동작하는 프로토타입</span>
       </div>
     </header>
   )
