@@ -1,19 +1,35 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ANALYSIS_STEPS } from '../../data/prototype'
 
-export function LoadingScreen({ plan, onDone }) {
+export function LoadingScreen({ plan, onDone, isComplete = false }) {
   const [active, setActive] = useState(0)
+  const onDoneRef = useRef(onDone)
+  onDoneRef.current = onDone
+
   useEffect(() => {
-    const t = setInterval(() => setActive((v) => v + 1), 450)
+    if (isComplete) return undefined
+
+    const t = setInterval(
+      () =>
+        setActive((v) =>
+          Math.min(v + 1, Math.max(0, ANALYSIS_STEPS.length - 1)),
+        ),
+      450,
+    )
     return () => clearInterval(t)
-  }, [])
+  }, [isComplete])
+
   useEffect(() => {
-    if (active > ANALYSIS_STEPS.length) {
-      const t = setTimeout(onDone, 380)
+    if (isComplete) setActive(ANALYSIS_STEPS.length + 1)
+  }, [isComplete])
+
+  useEffect(() => {
+    if (isComplete && active > ANALYSIS_STEPS.length) {
+      const t = setTimeout(() => onDoneRef.current(), 380)
       return () => clearTimeout(t)
     }
     return undefined
-  }, [active, onDone])
+  }, [active, isComplete])
   return (
     <main className="screen active">
       <div className="analysing">

@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { analyze, SAMPLE } from './data/prototype'
-import { createFestivalPlan } from './api/festivalPlans'
+import { createFestivalPlan, getFestivalPlanId } from './api/festivalPlans'
+import {
+  executeFestivalPlanAnalysis,
+  getAnalysis,
+  getAnalysisId,
+  getTargetVisitorAnalysis,
+  getTrendFitAnalysis,
+} from './api/analyses'
+import { ApiError } from './api/http'
 import { Header } from './components/AppHeader'
 import { useAuth } from './auth/AuthProvider'
 import { LoginModal } from './features/auth/LoginModal'
@@ -19,6 +27,7 @@ import {
   normalizeFestivalPlan,
 } from './features/input/festivalPlanParser'
 import { navigate, useRoute } from './routing'
+import { mergeServerAnalysis } from './features/analysis/serverAnalysis'
 
 const EMPTY_PLAN = {
   planName: '',
@@ -42,18 +51,6 @@ const EMPTY_PLAN = {
   customProgramNames: [],
 }
 
-const getResponseId = (value) => {
-  if (!value || typeof value !== 'object') return null
-  for (const key of ['planId', 'festivalPlanId', 'id']) {
-    if (typeof value[key] === 'string' || typeof value[key] === 'number') return String(value[key])
-  }
-  for (const child of Object.values(value)) {
-    const found = getResponseId(child)
-    if (found) return found
-  }
-  return null
-}
-
 export default function App() {
   const { isAuthenticated, isPending, login, signup, logout } = useAuth()
   const route = useRoute()
@@ -71,10 +68,15 @@ export default function App() {
     [isRegisteringPlan, setIsRegisteringPlan] = useState(false),
     [registrationError, setRegistrationError] = useState(''),
     [festivalPlanResponse, setFestivalPlanResponse] = useState(null),
+    [registeredPlanId, setRegisteredPlanId] = useState(null),
+    [registeredAnalysisId, setRegisteredAnalysisId] = useState(null),
+    [isAnalysisComplete, setIsAnalysisComplete] = useState(false),
     [autoFilledFields, setAutoFilledFields] = useState({})
   const registrationInFlightRef = useRef(false)
   const A = useMemo(
-      () => analysis || (stage === 'input' || stage === 'documents' ? null : analyze(plan)),
+      () =>
+        analysis ||
+        (stage === 'result' || stage === 'report' ? analyze(plan) : null),
       [analysis, plan, stage],
     ),
     index = ITEMS.findIndex((x) => x.key === openKey),
@@ -119,7 +121,7 @@ export default function App() {
           )
           setPlan(reportPlan)
           setAutoFilledFields({})
-          setAnalysis(document.plan ? analyze(reportPlan) : null)
+          setAnalysis(document.analysis || (document.plan ? analyze(reportPlan) : null))
           setStage('report')
         }
         return
@@ -154,6 +156,9 @@ export default function App() {
       setAnalysis(null)
       setRegistrationError('')
       setFestivalPlanResponse(null)
+      setRegisteredPlanId(null)
+      setRegisteredAnalysisId(null)
+      setIsAnalysisComplete(false)
       navigate(isAuthenticated ? '/documents' : '/')
     },
     home = openDocuments,
@@ -167,6 +172,9 @@ export default function App() {
       setStep(1)
       setRegistrationError('')
       setFestivalPlanResponse(null)
+      setRegisteredPlanId(null)
+      setRegisteredAnalysisId(null)
+      setIsAnalysisComplete(false)
       setStage('input')
       navigate('/plans/new')
     },
@@ -175,22 +183,29 @@ export default function App() {
       setStep(1)
       setRegistrationError('')
       setFestivalPlanResponse(null)
+      setRegisteredPlanId(null)
+      setRegisteredAnalysisId(null)
+      setIsAnalysisComplete(false)
       setStage('input')
       navigate('/plans/new')
     },
     finish = () => {
-      const nextAnalysis = analyze(plan)
-      const id = getResponseId(festivalPlanResponse) || `local-${Date.now()}`
+      const id = registeredAnalysisId
+      if (!id || !analysis) {
+        setIsAnalysisComplete(false)
+        setRegistrationError('분석 결과를 확인하지 못했습니다. 다시 시도해주세요.')
+        setStage('review')
+        return
+      }
       const document = {
         analysisId: id,
         festivalName: plan.planName || plan.name || '새 축제 기획안',
         hostRegion: plan.org || [plan.sido, plan.sigungu].filter(Boolean).join(' ') || '—',
         plan,
+        analysis,
       }
       setActiveDocument(document)
-      setAnalysis(nextAnalysis)
       setStage('result')
-      navigate(`/reports/${encodeURIComponent(id)}`)
     }
 
   const handleParsedPlan = ({ response }) => {
@@ -204,6 +219,9 @@ export default function App() {
     setStep(1)
     setRegistrationError('')
     setFestivalPlanResponse(null)
+    setRegisteredPlanId(null)
+    setRegisteredAnalysisId(null)
+    setIsAnalysisComplete(false)
     setStage('input')
     navigate('/plans/new')
   }
@@ -214,19 +232,77 @@ export default function App() {
     registrationInFlightRef.current = true
     setIsRegisteringPlan(true)
     setRegistrationError('')
+    let phase = 'registration'
 
     try {
       const payload = buildFestivalPlanPayload(plan)
       const response = await createFestivalPlan(payload)
-      // ApiResponse.data is intentionally untyped in the backend OpenAPI spec.
-      // Keep the complete response so a future analysis request can use the
-      // server-issued identifier without guessing its field name here.
+      const planId = getFestivalPlanId(response)
+      if (!planId) {
+        throw new ApiError('기획안 등록 응답에서 planId를 확인하지 못했습니다.', {
+          data: response,
+        })
+      }
+
       setFestivalPlanResponse(response)
+      setRegisteredPlanId(planId)
+      setRegisteredAnalysisId(null)
+      setAnalysis(null)
+      setIsAnalysisComplete(false)
       setStage('loading')
+      phase = 'analysis-execution'
+      const executionResponse = await executeFestivalPlanAnalysis(planId)
+      const analysisId = getAnalysisId(executionResponse)
+      if (!analysisId) {
+        throw new ApiError('분석 실행 응답에서 analysisId를 확인하지 못했습니다.', {
+          data: executionResponse,
+        })
+      }
+      setRegisteredAnalysisId(analysisId)
+
+      phase = 'analysis-summary'
+      const summary = await getAnalysis(analysisId)
+      const supportedItemTypes = ['TARGET_VISITOR', 'TREND_FIT'].filter((itemType) =>
+        summary?.items?.some((item) => item?.itemType === itemType),
+      )
+      phase = 'analysis-detail'
+      const detailGetters = {
+        TARGET_VISITOR: getTargetVisitorAnalysis,
+        TREND_FIT: getTrendFitAnalysis,
+      }
+      const detailEntries = await Promise.all(
+        supportedItemTypes.map(async (itemType) => [
+          itemType,
+          await detailGetters[itemType](analysisId),
+        ]),
+      )
+      const details = Object.fromEntries(detailEntries)
+      const serverAnalysis = mergeServerAnalysis(analyze(plan), summary, details)
+      setAnalysis(serverAnalysis)
+      setIsAnalysisComplete(true)
     } catch (error) {
       setRegistrationError(
         error?.message || '축제 기획안 등록에 실패했습니다. 다시 시도해주세요.',
       )
+      if (phase === 'analysis-execution' && error?.status === 404) {
+        setRegistrationError('등록된 축제 기획안을 찾을 수 없습니다. 다시 시도해주세요.')
+      } else if (phase === 'analysis-execution' && error?.status >= 500) {
+        setRegistrationError('축제 기획안 분석 실행 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
+      } else if (phase === 'analysis-summary' && error?.status === 404) {
+        setRegistrationError('분석 결과 요약을 찾을 수 없습니다. 다시 시도해주세요.')
+      } else if (phase === 'analysis-detail' && error?.status === 404) {
+        setRegistrationError('분석 상세 결과를 찾을 수 없습니다. 다시 시도해주세요.')
+      } else if ((phase === 'analysis-summary' || phase === 'analysis-detail') && error?.status >= 500) {
+        setRegistrationError('분석 결과를 불러오는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
+      } else if (phase === 'analysis' && error?.status === 404) {
+        setRegistrationError('등록된 축제 기획안을 찾을 수 없습니다. 다시 시도해주세요.')
+      } else if (phase === 'analysis' && error?.status >= 500) {
+        setRegistrationError('축제 기획안 분석 실행 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
+      } else if (error?.status === 401 || error?.status === 403) {
+        setRegistrationError('인증이 만료되었거나 권한이 없습니다. 다시 로그인해주세요.')
+      }
+      setIsAnalysisComplete(false)
+      setStage('review')
     } finally {
       registrationInFlightRef.current = false
       setIsRegisteringPlan(false)
@@ -308,7 +384,7 @@ export default function App() {
             const reportPlan = normalizeFestivalPlan(document.plan || EMPTY_PLAN)
             setPlan(reportPlan)
             setAutoFilledFields({})
-            setAnalysis(document.plan ? analyze(reportPlan) : null)
+            setAnalysis(document.analysis || (document.plan ? analyze(reportPlan) : null))
             setStage('report')
             navigate(`/reports/${encodeURIComponent(document.analysisId)}`)
           }}
@@ -339,7 +415,9 @@ export default function App() {
           error={registrationError}
         />
       )}
-      {stage === 'loading' && <LoadingScreen plan={plan} onDone={finish} />}
+      {stage === 'loading' && (
+        <LoadingScreen plan={plan} onDone={finish} isComplete={isAnalysisComplete} />
+      )}
       {stage === 'result' && A && (
         <ResultScreen
           A={A}
