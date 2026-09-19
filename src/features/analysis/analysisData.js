@@ -1,3 +1,4 @@
+import { YEARS } from '../../data/prototype'
 import { fmt, round1 } from '../../utils/formatters'
 
 export const ITEMS = [
@@ -44,8 +45,89 @@ export const ITEMS = [
     scope: '행사장 반경 5km · 15km 관광지 · 음식점 상권 · 숙박 POI',
   },
 ]
+
+const REPORT_ITEM_TYPES = {
+  visitor: 'TARGET_VISITOR',
+  trend: 'TREND_FIT',
+  demand: 'DEMAND_FIT',
+  overlap: 'CONFLICT_RISK',
+  weather: 'WEATHER_RISK',
+  link: 'TOURISM_LINKAGE',
+}
+
+const reportItemData = (item, A) => {
+  const itemType = REPORT_ITEM_TYPES[item.key]
+  const reportItem = itemType ? A.report?.items?.[itemType] : null
+  if (!reportItem) return null
+
+  const primaryMetric = reportItem.primaryMetric || {}
+  const metrics = Array.isArray(reportItem.metrics) ? reportItem.metrics : []
+  const detail = A.report?.details?.[itemType]
+  const chart = reportItem.chart || null
+  const chartValues = chart?.values ?? chart?.data ?? chart?.series
+  const status = reportItem.status ?? reportItem.statusLevel ?? '-'
+  const statusLevel = String(reportItem.statusLevel ?? '').toUpperCase()
+  const tone =
+    statusLevel === 'POSITIVE' || statusLevel === 'GOOD' || statusLevel === 'LOW'
+      ? 'g'
+      : statusLevel === 'NEGATIVE' || statusLevel === 'DANGER' || statusLevel === 'HIGH'
+        ? 'r'
+        : 'w'
+  const primaryValue = primaryMetric.value ?? reportItem.score ?? '-'
+  return {
+    title: reportItem.title ?? item.name,
+    pill: status,
+    tone,
+    metric: primaryValue,
+    unit: primaryMetric.label ?? (reportItem.score === null || reportItem.score === undefined ? '' : '/100'),
+    sub: metrics.map((metric) => [metric?.label ?? '-', metric?.value ?? '-']),
+    read:
+      reportItem.summary ??
+      detail?.resultInterpretation?.summary ??
+      detail?.resultInterpretation?.detail ??
+      reportItem.description ??
+      '-',
+    bars: Array.isArray(chartValues) ? chartValues : [],
+    chart,
+  }
+}
+
 export function cardData(item, A) {
+  const reportData = reportItemData(item, A)
+  if (reportData) return reportData
+
   const v = A.v
+  const content = A.analysisContent?.[item.key] || {}
+  const hasServerDemand = Boolean(A.server?.items?.DEMAND_FIT)
+  const hasServerConflict = Boolean(A.server?.items?.CONFLICT_RISK?.detail)
+  if (item.key === 'visitor' && v.targetSource === 'server') {
+    const displayNumber = (value) =>
+      value === null || value === undefined || !Number.isFinite(Number(value))
+        ? '-'
+        : fmt(value)
+    const ratioLabel = v.ratio === null ? '-' : `${round1(v.ratio)}배`
+    return {
+      pill: v.v1,
+      tone: v.ratio === null ? 'w' : v.ratio > 1.6 || v.ratio < 0.5 ? 'r' : 'g',
+      metric: ratioLabel,
+      unit: '방문객 중앙값 대비',
+      sub: [
+        ['목표', `${displayNumber(v.targetVisitorCount)}명`],
+        ['중앙값', `${displayNumber(v.median)}명`],
+        ['점수', v.s1 ?? '-'],
+      ],
+      read:
+        content.summary ||
+        (v.ratio === null
+          ? '방문객 중앙값을 확인할 수 없어 배수를 계산할 수 없습니다.'
+          : v.ratio > 1.3
+            ? `방문객 중앙값 ${displayNumber(v.median)}명보다 높은 목표입니다.`
+            : v.ratio < 0.8
+              ? `방문객 중앙값 ${displayNumber(v.median)}명보다 보수적인 목표입니다.`
+              : '방문객 중앙값을 기준으로 적정 범위의 목표입니다.'),
+      bars: [v.median, v.targetVisitorCount],
+    }
+  }
   if (item.key === 'visitor')
     return {
       pill: v.v1,
@@ -59,47 +141,98 @@ export function cardData(item, A) {
         ['점수', v.s1],
       ],
       read:
-        v.ratio > 1.3
+        content.summary ||
+        (v.ratio > 1.3
           ? `유사 축제 중위값 ${fmt(v.median)}명을 ${round1(v.ratio)}배 웃도는 목표입니다. 예산·인력 산정 근거가 약해질 수 있습니다.`
           : v.ratio < 0.8
             ? '유사 축제 대비 보수적인 목표입니다. 운영 준비 여력은 있으나 사업 규모 설득에 불리할 수 있습니다.'
-            : '유사 축제의 실제 규모 범위 안에 있는 목표입니다.',
+            : '유사 축제의 실제 규모 범위 안에 있는 목표입니다.'),
       bars: [v.median, A.p.target],
+  }
+  if (item.key === 'trend') {
+    const hasServerTrend = Boolean(A.server?.items?.TREND_FIT)
+    const trendYears = hasServerTrend
+      ? Array.isArray(A.T?.years)
+        ? A.T.years
+        : []
+      : Array.isArray(A.T?.years) && A.T.years.length
+        ? A.T.years
+        : YEARS
+    const latestIndex = Array.isArray(A.T?.series) ? A.T.series.length - 1 : -1
+    const latestInterest =
+      A.T?.latestInterest !== undefined ? A.T.latestInterest : A.T?.series?.[latestIndex]
+    const latestYear = A.T?.latestYear !== undefined ? A.T.latestYear : trendYears[latestIndex]
+    const firstYear = A.T?.firstYear !== undefined ? A.T.firstYear : trendYears[0]
+    const cagrPeriods =
+      Number.isFinite(Number(firstYear)) && Number.isFinite(Number(latestYear))
+        ? Math.max(0, Number(latestYear) - Number(firstYear))
+        : null
+    const displayValue = (value) =>
+      value === null || value === undefined || !Number.isFinite(Number(value)) ? '-' : value
+    const displayRate = (value) => {
+      if (value === null || value === undefined || !Number.isFinite(Number(value))) return '-'
+      return `${value > 0 ? '+' : ''}${(value * 100).toFixed(1)}%/년`
     }
-  if (item.key === 'trend')
+    const periodLabel = cagrPeriods === null ? '연평균 증감률' : `최근 ${cagrPeriods}년 CAGR`
     return {
       pill: v.v2,
       tone: v.v2 === '상승' ? 'g' : v.v2 === '유지' ? 'w' : 'r',
-      metric: A.T.series[4],
-      unit: '관심도 지수 (2026)',
+      metric: displayValue(latestInterest),
+      unit: `관심도 지수 (${latestYear ?? '-'})`,
       sub: [
-        [
-          '5년 추이',
-          `${v.tCagr > 0 ? '+' : ''}${(v.tCagr * 100).toFixed(1)}%/년`,
-        ],
+        [periodLabel, displayRate(v.tCagr)],
         ['점수', v.s2],
       ],
       read:
-        v.v2 === '상승'
-          ? `${A.T.name} 주제의 검색 관심도가 5년 연속 올라 관심 흐름과 방향이 맞습니다.`
+        content.summary ||
+        (v.v2 === '상승'
+          ? `${A.T.name} 주제의 검색 관심도가 상승해 관심 흐름과 방향이 맞습니다.`
           : v.v2 === '유지'
             ? '관심도가 뚜렷한 방향 없이 유지되고 있습니다. 주제만으로는 신규 방문 동인이 약합니다.'
-            : '관심도가 지속 하락 중입니다. 주제 구성을 그대로 두면 신규 유입이 어려울 수 있습니다.',
+            : '관심도가 지속 하락 중입니다. 주제 구성을 그대로 두면 신규 유입이 어려울 수 있습니다.'),
       bars: A.T.series,
     }
+  }
   if (item.key === 'demand')
-    return {
+    {
+      const eventMonth = hasServerDemand ? A.R.eventMonth : A.R.eventMonth ?? A.m + 1
+      return {
       pill: v.v3,
       tone: v.v3 === '적합' ? 'g' : v.v3 === '조건부 적합' ? 'w' : 'r',
       metric: v.s3,
       unit: '적합성 점수 / 100',
       sub: [
-        [`${A.m + 1}월 수요`, `지수 ${v.mIdx} (연중 ${v.mRank}위)`],
+        [`${eventMonth ?? '-'}월 수요`, `지수 ${v.mIdx ?? '-'} (연중 ${v.mRank ?? '-'}위)`],
         ['접근성', v.accScore],
       ],
-      read: `개최 월 수요는 연중 ${v.mRank}위로 ${v.mIdx >= 110 ? '유리' : '평이'}하지만, ${v.accScore < 60 ? `행사장 접근성(${v.accScore}점)이 전체 점수를 끌어내립니다.` : '접근성도 무리 없는 수준입니다.'}`,
+      read:
+        hasServerDemand
+          ? content.summary ?? '-'
+          : content.summary ||
+            `개최 월 수요는 연중 ${v.mRank}위로 ${v.mIdx >= 110 ? '유리' : '평이'}하지만, ${v.accScore < 60 ? `행사장 접근성(${v.accScore}점)이 전체 점수를 끌어내립니다.` : '접근성도 무리 없는 수준입니다.'}`,
       bars: A.R.monthly,
-      highlight: A.m,
+      highlight: eventMonth === null || eventMonth === undefined ? -1 : eventMonth - 1,
+      }
+    }
+  if (item.key === 'overlap' && hasServerConflict)
+    return {
+      pill: `위험 ${v.v4 ?? '-'}`,
+      tone:
+        v.v4 === '높음'
+          ? 'r'
+          : v.v4 === '보통'
+            ? 'w'
+            : v.v4 === '낮음' || v.v4 === '없음'
+              ? 'g'
+              : 'w',
+      metric: v.nDirect === null || v.nNear === null ? '-' : v.nDirect + v.nNear,
+      unit: '중복 가능 행사',
+      sub: [
+        ['기간 직접 중복', `${v.nDirect ?? '-'}건`],
+        ['인접 시기 행사', `${v.nNear ?? '-'}건`],
+      ],
+      read: content.summary || '-',
+      bars: [],
     }
   if (item.key === 'overlap')
     return {
@@ -111,24 +244,46 @@ export function cardData(item, A) {
         ['기간 직접 중복', `${v.nDirect}건`],
         ['±3일 인접', `${v.nNear}건`],
       ],
-      read: v.nDirect
-        ? `개최 기간에 반경 60km 내 행사 ${v.nDirect}건이 겹칩니다. 관람객 분산과 숙박 경합이 예상됩니다.`
-        : v.nNear
-          ? `직접 겹치는 행사는 없으나 전후 3일 내 인접 권역 행사가 ${v.nNear}건 있습니다.`
-          : '반경 80km 내에서 같은 시기에 반복 개최되는 행사가 확인되지 않았습니다.',
+      read:
+        content.summary ||
+        (v.nDirect
+          ? `개최 기간에 반경 60km 내 행사 ${v.nDirect}건이 겹칩니다. 관람객 분산과 숙박 경합이 예상됩니다.`
+          : v.nNear
+            ? `직접 겹치는 행사는 없으나 전후 3일 내 인접 권역 행사가 ${v.nNear}건 있습니다.`
+            : '반경 80km 내에서 같은 시기에 반복 개최되는 행사가 확인되지 않았습니다.'),
       bars: [],
     }
   if (item.key === 'weather')
     return {
-      pill: `취약도 ${v.v5}`,
+      pill: `취약도 ${v.v5 ?? '-'}`,
       tone: v.v5 === '높음' ? 'r' : v.v5 === '보통' ? 'w' : 'g',
-      metric: `${v.rainP}%`,
+      metric: v.rainP === null || v.rainP === undefined ? '-' : `${v.rainP}%`,
       unit: `${A.m + 1}월 동일 시기 강수 발생률`,
       sub: [['기상 취약 프로그램', `${A.progs.filter((x) => x.out || x.wind || x.fog).length}개`]],
-      read: `동일 시기 강수 발생률은 ${v.rainP}%이며, 현재 선택한 핵심 프로그램의 기상 취약도는 ${v.wRisk}점(${v.v5})입니다.`,
+      read:
+        content.summary ||
+        `동일 시기 강수 발생률은 ${v.rainP}%이며, 현재 선택한 핵심 프로그램의 기상 취약도는 ${v.wRisk}점(${v.v5})입니다.`,
       bars: A.R.weather.rainYears,
       highlight: A.m,
     }
+  if (item.key === 'link' && A.linkage) {
+    const score = A.linkage.score
+    const tone = score === null ? 'w' : score >= 70 ? 'g' : score >= 48 ? 'w' : 'r'
+    return {
+      pill: score === null ? '관광 연계 잠재력' : `연계 ${score >= 70 ? '높음' : score >= 48 ? '보통' : '낮음'}`,
+      tone,
+      metric: score === null ? '-' : score,
+      unit: '/100',
+      sub: [
+        ['전체 후보 POI', `${A.linkage.totalCandidatePoiCount ?? '-'}`],
+        ['관광·문화', `${A.linkage.tourismCultureCount ?? '-'}`],
+        ['음식·쇼핑', `${A.linkage.foodShoppingCount ?? '-'}`],
+        ['숙박', `${A.linkage.accommodationCount ?? '-'}`],
+      ],
+      read: content.summary ?? '-',
+      bars: [],
+    }
+  }
   const P = A.R.poi
   return {
     pill: `잠재력 ${v.v6}`,
@@ -140,7 +295,9 @@ export function cardData(item, A) {
       ['숙박', `${P.r15.stay}곳`],
       ['체류 수용률', `${Math.round(v.stayCov)}%`],
     ],
-    read: `관광지 밀도는 ${v.tourS >= 70 ? '충분' : '보통'}하지만 숙박 수용은 일평균 방문객의 ${Math.round(v.stayCov)}% 수준입니다.`,
+    read:
+      content.summary ||
+      `관광지 밀도는 ${v.tourS >= 70 ? '충분' : '보통'}하지만 숙박 수용은 일평균 방문객의 ${Math.round(v.stayCov)}% 수준입니다.`,
     bars: [],
   }
 }

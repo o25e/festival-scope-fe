@@ -7,6 +7,19 @@ import { getDetailHtml } from '../analysis/DetailPanel'
 export function ReportScreen({ A, onBack, onPrint, backLabel = '결과로 돌아가기' }) {
   const cards = ITEMS.map((item) => ({ item, data: cardData(item, A) }))
   const recommendations = useMemo(() => {
+    if (A.report?.hasRecommendations) {
+      return (A.report.recommendations || []).map((recommendation, i) => ({
+        source:
+          recommendation.source ??
+          (ITEMS.find((item) => item.key === recommendation.itemType)?.name ||
+            '평가 항목'),
+        title: recommendation.t,
+        text: recommendation.d,
+        priority: recommendation.p ?? 3,
+        i,
+      }))
+    }
+
     const doc = new DOMParser().parseFromString(
       ITEMS.map((item) => getDetailHtml(item, A)).join(''),
       'text/html',
@@ -57,6 +70,12 @@ export function ReportScreen({ A, onBack, onPrint, backLabel = '결과로 돌아
                 <i>|</i>
                 {A.p.start} ~ {A.p.end} ({A.days}일)<i>|</i>목표{' '}
                 {fmt(A.p.target)}명
+                {A.server?.analysisStatus !== null && A.server?.analysisStatus !== undefined && (
+                  <><i>|</i>{A.server.analysisStatus}</>
+                )}
+                {A.server?.createdAt !== null && A.server?.createdAt !== undefined && (
+                  <><i>|</i>{String(A.server.createdAt).slice(0, 10)}</>
+                )}
               </div>
             </div>
             <div className="report-score">
@@ -85,7 +104,7 @@ export function ReportScreen({ A, onBack, onPrint, backLabel = '결과로 돌아
                   <div>
                     <span className={`pri p${r.priority}`}>
                       {r.priority === 1
-                        ? '즉시'
+                        ? '즉시 반영'
                         : r.priority === 2
                           ? '검토'
                           : '선택'}
@@ -114,6 +133,32 @@ export function ReportScreen({ A, onBack, onPrint, backLabel = '결과로 돌아
     </main>
   )
 }
+export function ReportLoadingScreen() {
+  return (
+    <main className="screen active">
+      <div className="wrap">
+        <section className="formcard" role="status" aria-live="polite">
+          <strong>최종 리포트를 불러오는 중입니다.</strong>
+        </section>
+      </div>
+    </main>
+  )
+}
+
+export function ReportErrorScreen({ error, notFound = false, onBack }) {
+  return (
+    <main className="screen active">
+      <div className="wrap">
+        <section className="formcard" role="alert">
+          <strong>{notFound ? '분석 결과를 찾을 수 없습니다.' : '최종 리포트를 불러오지 못했습니다.'}</strong>
+          <p>{error || '진입 경로를 확인하고 다시 시도해 주세요.'}</p>
+          <Button small onClick={onBack}>결과로 돌아가기</Button>
+        </section>
+      </div>
+    </main>
+  )
+}
+
 function ReportGroup({ title, tag, cards }) {
   return (
     <section className="rpt-sec">
@@ -130,12 +175,22 @@ function ReportGroup({ title, tag, cards }) {
         {cards.map(({ item, data }) => (
           <div className="rpt-item" key={item.key}>
             <div className="t">
-              <b>{item.name}</b>
+              <b>{data.title ?? item.name}</b>
               <span className={levelClass(data.tone)}>{data.pill}</span>
             </div>
             <div className="report-metric">
               {data.metric} <span>{data.unit}</span>
             </div>
+            {data.sub?.length > 0 && (
+              <div className="src">
+                {data.sub.map(([label, value]) => (
+                  <span key={label}>{label}: {value}</span>
+                ))}
+              </div>
+            )}
+            {data.chart?.highlightLabel !== null && data.chart?.highlightLabel !== undefined && (
+              <div className="src">{data.chart.highlightLabel}</div>
+            )}
             <p>{data.read}</p>
           </div>
         ))}
