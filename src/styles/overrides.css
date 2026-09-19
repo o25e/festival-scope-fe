@@ -413,10 +413,19 @@
 }
 
 /* Detail tables: parity with the source HTML, scoped to the detail panel. */
+.p-body {
+  overflow-x: auto;
+}
 .p-body table.dt {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 12px;
+}
+.p-body table.dt th,
+.p-body table.dt td {
+  min-width: 0;
+  text-align: left;
 }
 .p-body table.dt th {
   text-align: left;
@@ -425,7 +434,7 @@
   font-size: 11.5px;
   padding: 7px 8px;
   border-bottom: 1px solid var(--line);
-  white-space: nowrap;
+  word-break: keep-all;
 }
 .p-body table.dt td {
   padding: 8px;
@@ -435,9 +444,13 @@
 .p-body table.dt tr:last-child td {
   border-bottom: none;
 }
+.p-body table.dt th.n,
 .p-body table.dt td.n {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+.p-body table.dt td.n {
+  white-space: nowrap;
 }
 .p-body table.dt.weather-evidence-table {
   table-layout: fixed;
@@ -458,6 +471,12 @@
 }
 .p-body table.dt tr.hit2 td {
   background: #fbf1ef;
+}
+@media (max-width: 640px) {
+  .p-body table.dt,
+  .p-body table.dt.weather-evidence-table {
+    table-layout: auto;
+  }
 }
 .p-body .tagsm {
   font-size: 10.5px;

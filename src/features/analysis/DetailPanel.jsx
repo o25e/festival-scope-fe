@@ -275,7 +275,7 @@ export function getDetailHtml(item, A) {
         )}<p class="vizcap">동일 축제의 연도별 방문객 이력입니다. 값이 없는 연도는 0명이 아니라 데이터 없음으로 표시합니다.</p></div>`
       : `<div class="readbox"><p>동일 축제의 과거 방문 이력이 없습니다.</p></div>`
     const historyTable = historyRows.length
-      ? `<table class="dt" style="margin-top:12px"><tr><th>연도</th><th>방문객 수</th><th>예산</th></tr>${historyRows
+      ? `<table class="dt" style="margin-top:12px"><tr><th>연도</th><th class="n">방문객 수</th><th class="n">예산</th></tr>${historyRows
           .map(
             (row) =>
               `<tr><td>${row.year ?? '-'}</td><td class="n">${displayVisitorNumber(row.visitorCount)}${row.visitorCount === null ? '' : '명'}</td><td class="n">${displayVisitorDecimal(row.budget)}</td></tr>`,
