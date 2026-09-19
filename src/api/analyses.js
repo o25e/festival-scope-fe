@@ -52,6 +52,25 @@ export const getAnalysis = (analysisId, options = {}) => {
   )
 }
 
+export const getAnalysisReport = (analysisId, options = {}) => {
+  if (!isAnalysisId(analysisId)) {
+    throw new ApiError('분석 리포트 조회 조건이 유효하지 않습니다.')
+  }
+
+  return request(
+    `${ANALYSES_PATH}/${encodeURIComponent(String(analysisId).trim())}/report`,
+    {
+      ...options,
+      auth: true,
+    },
+  ).then((response) => {
+    const successfulResponse = assertSuccess(response, '분석 최종 리포트를 불러오지 못했습니다.')
+    if (successfulResponse?.summary) return successfulResponse
+    if (successfulResponse?.data?.summary) return successfulResponse.data
+    return successfulResponse
+  })
+}
+
 export const getAnalysisItem = (analysisId, itemType, options = {}) => {
   if (!isAnalysisId(analysisId) || typeof itemType !== 'string' || !itemType.trim()) {
     throw new ApiError('분석 상세 결과 조회 조건이 유효하지 않습니다.')

@@ -45,7 +45,57 @@ export const ITEMS = [
     scope: '행사장 반경 5km · 15km 관광지 · 음식점 상권 · 숙박 POI',
   },
 ]
+
+const REPORT_ITEM_TYPES = {
+  visitor: 'TARGET_VISITOR',
+  trend: 'TREND_FIT',
+  demand: 'DEMAND_FIT',
+  overlap: 'CONFLICT_RISK',
+  weather: 'WEATHER_RISK',
+  link: 'TOURISM_LINKAGE',
+}
+
+const reportItemData = (item, A) => {
+  const itemType = REPORT_ITEM_TYPES[item.key]
+  const reportItem = itemType ? A.report?.items?.[itemType] : null
+  if (!reportItem) return null
+
+  const primaryMetric = reportItem.primaryMetric || {}
+  const metrics = Array.isArray(reportItem.metrics) ? reportItem.metrics : []
+  const detail = A.report?.details?.[itemType]
+  const chart = reportItem.chart || null
+  const chartValues = chart?.values ?? chart?.data ?? chart?.series
+  const status = reportItem.status ?? reportItem.statusLevel ?? '-'
+  const statusLevel = String(reportItem.statusLevel ?? '').toUpperCase()
+  const tone =
+    statusLevel === 'POSITIVE' || statusLevel === 'GOOD' || statusLevel === 'LOW'
+      ? 'g'
+      : statusLevel === 'NEGATIVE' || statusLevel === 'DANGER' || statusLevel === 'HIGH'
+        ? 'r'
+        : 'w'
+  const primaryValue = primaryMetric.value ?? reportItem.score ?? '-'
+  return {
+    title: reportItem.title ?? item.name,
+    pill: status,
+    tone,
+    metric: primaryValue,
+    unit: primaryMetric.label ?? (reportItem.score === null || reportItem.score === undefined ? '' : '/100'),
+    sub: metrics.map((metric) => [metric?.label ?? '-', metric?.value ?? '-']),
+    read:
+      reportItem.summary ??
+      detail?.resultInterpretation?.summary ??
+      detail?.resultInterpretation?.detail ??
+      reportItem.description ??
+      '-',
+    bars: Array.isArray(chartValues) ? chartValues : [],
+    chart,
+  }
+}
+
 export function cardData(item, A) {
+  const reportData = reportItemData(item, A)
+  if (reportData) return reportData
+
   const v = A.v
   const content = A.analysisContent?.[item.key] || {}
   const hasServerDemand = Boolean(A.server?.items?.DEMAND_FIT)

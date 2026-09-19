@@ -36,6 +36,18 @@ const normalizePriority = (value) => {
   return { HIGH: 1, MEDIUM: 2, LOW: 3 }[String(value || '').toUpperCase()] || 3
 }
 
+const normalizeReportPriority = (value) => {
+  const numeric = asNumber(value)
+  if (numeric !== null) return numeric
+  return (
+    {
+      IMMEDIATE: 1,
+      REVIEW: 2,
+      OPTIONAL: 3,
+    }[String(value || '').toUpperCase()] ?? normalizePriority(value)
+  )
+}
+
 const normalizeRecommendations = (detail) => {
   if (!Array.isArray(detail?.recommendations)) return null
   return detail.recommendations
@@ -43,17 +55,144 @@ const normalizeRecommendations = (detail) => {
     .sort((a, b) => (asNumber(a?.displayOrder) ?? 0) - (asNumber(b?.displayOrder) ?? 0))
     .map((item) => ({
       p: normalizePriority(item?.priority),
-      t: item?.title || '-',
-      d: item?.content || '-',
+      t: item?.title ?? '-',
+      d: item?.content ?? '-',
     }))
 }
 
 const normalizeAnalysisContent = (detail) => {
   const interpretation = detail?.resultInterpretation || {}
   return {
-    summary: interpretation.summary || null,
-    detail: interpretation.detail || null,
+    summary: interpretation.summary ?? null,
+    detail: interpretation.detail ?? null,
     recommendations: normalizeRecommendations(detail),
+  }
+}
+
+const REPORT_ITEM_TYPES = [
+  'TARGET_VISITOR',
+  'TREND_FIT',
+  'DEMAND_FIT',
+  'CONFLICT_RISK',
+  'WEATHER_RISK',
+  'TOURISM_LINKAGE',
+]
+
+const REPORT_ITEM_FIELDS = {
+  TARGET_VISITOR: ['targetVisitor', 'targetVisitorAnalysis', 'targetVisitorResult', 'targetVisitorAnalysisResult', 'TARGET_VISITOR'],
+  TREND_FIT: ['trendFit', 'trendFitAnalysis', 'trendFitResult', 'trendFitAnalysisResult', 'TREND_FIT'],
+  DEMAND_FIT: ['demandFit', 'demandFitAnalysis', 'demandFitResult', 'demandFitAnalysisResult', 'DEMAND_FIT'],
+  CONFLICT_RISK: ['conflictRisk', 'conflictRiskAnalysis', 'conflictRiskResult', 'conflictRiskAnalysisResult', 'CONFLICT_RISK'],
+  WEATHER_RISK: ['weatherRisk', 'weatherRiskAnalysis', 'weatherRiskResult', 'weatherRiskAnalysisResult', 'WEATHER_RISK'],
+  TOURISM_LINKAGE: ['tourismLinkage', 'tourismLinkageAnalysis', 'tourismLinkageResult', 'tourismLinkageAnalysisResult', 'TOURISM_LINKAGE'],
+}
+
+const reportOwnValue = (value, keys) => {
+  if (!value || typeof value !== 'object') return undefined
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(value, key)) return value[key]
+  }
+  return undefined
+}
+
+const reportRecordValue = (value, keys) => {
+  const direct = reportOwnValue(value, keys)
+  if (direct !== undefined) return direct
+  const entries = value && typeof value === 'object' ? Object.entries(value) : []
+  const normalizedKeys = keys.map((key) => key.toLowerCase())
+  const entry = entries.find(([key]) => normalizedKeys.includes(key.toLowerCase()))
+  return entry?.[1]
+}
+
+const unwrapReportDetail = (value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value
+  if (value.detail !== null && value.detail !== undefined) return value.detail
+  if (value.data && typeof value.data === 'object' && !Array.isArray(value.data)) return value.data
+  return value
+}
+
+const normalizeReportRecommendations = (value) => {
+  if (!Array.isArray(value)) return []
+  return value
+    .slice()
+    .sort((a, b) => (asNumber(a?.displayOrder) ?? 0) - (asNumber(b?.displayOrder) ?? 0))
+    .map((item) => ({
+      itemType: item?.itemType ?? item?.analysisItemType ?? null,
+      p: normalizeReportPriority(item?.priority ?? item?.priorityLevel),
+      t: item?.title ?? item?.recommendationTitle ?? '-',
+      d: item?.content ?? item?.description ?? item?.recommendationContent ?? '-',
+      source: item?.source ?? item?.itemTitle ?? null,
+      raw: item,
+    }))
+}
+
+export const normalizeAnalysisReport = (response) => {
+  const root = response?.summary
+    ? response
+    : response?.data?.summary
+      ? response.data
+      : response?.data && typeof response.data === 'object'
+        ? response.data
+        : response || {}
+  const summary = root?.summary || {}
+  const summaryItems = Array.isArray(summary.items) ? summary.items : []
+  const items = Object.fromEntries(
+    REPORT_ITEM_TYPES.map((itemType) => [
+      itemType,
+      summaryItems.find((item) => item?.itemType === itemType) || null,
+    ]),
+  )
+  const details = {}
+  const resultRows = [root?.analysisResults, root?.results, root?.itemResults].find((value) => Array.isArray(value)) || []
+  REPORT_ITEM_TYPES.forEach((itemType) => {
+    const candidates = [
+      reportRecordValue(root, REPORT_ITEM_FIELDS[itemType]),
+      reportRecordValue(root?.details, REPORT_ITEM_FIELDS[itemType]),
+      reportRecordValue(root?.analyses, REPORT_ITEM_FIELDS[itemType]),
+      resultRows.find((item) => item?.itemType === itemType),
+    ]
+    const detail = candidates.find((candidate) => candidate !== null && candidate !== undefined)
+    if (detail !== undefined) details[itemType] = unwrapReportDetail(detail)
+  })
+
+  const summaryRecommendations = summaryItems.flatMap((item) =>
+    Array.isArray(item?.recommendations)
+      ? item.recommendations.map((recommendation) => ({
+          ...recommendation,
+          itemType: recommendation?.itemType ?? item.itemType,
+        }))
+      : [],
+  )
+  const recommendationValue = [
+    root?.recommendations,
+    root?.recommendationResults,
+    root?.recommendationList,
+    root?.modificationRecommendations,
+    root?.recommendedActions,
+    summaryRecommendations.length ? summaryRecommendations : undefined,
+  ].find((value) => Array.isArray(value))
+  const recommendations = normalizeReportRecommendations(recommendationValue)
+  REPORT_ITEM_TYPES.forEach((itemType) => {
+    const itemRecommendations = recommendations.filter((item) => item.itemType === itemType)
+    if (!itemRecommendations.length) return
+    details[itemType] = {
+      ...(details[itemType] || {}),
+      recommendations: itemRecommendations.map(({ raw, itemType: _itemType, ...item }) => ({
+        priority: item.p,
+        title: item.t,
+        content: item.d,
+        displayOrder: raw?.displayOrder,
+      })),
+    }
+  })
+
+  return {
+    raw: root,
+    summary,
+    items,
+    details,
+    recommendations,
+    hasRecommendations: Array.isArray(recommendationValue),
   }
 }
 
@@ -863,7 +1002,7 @@ const weatherModel = (baseAnalysis, detail) => {
   }
 }
 
-export const mergeServerAnalysis = (baseAnalysis, summary, details = {}) => {
+export const mergeServerAnalysis = (baseAnalysis, summary, details = {}, report = null) => {
   const targetSummary = getItem(summary, 'TARGET_VISITOR')
   const trendSummary = getItem(summary, 'TREND_FIT')
   const demandSummary = getItem(summary, 'DEMAND_FIT')
@@ -979,17 +1118,25 @@ export const mergeServerAnalysis = (baseAnalysis, summary, details = {}) => {
     link: normalizeAnalysisContent(details.TOURISM_LINKAGE),
   }
 
+  const festivalName = summary?.festivalName ?? baseAnalysis.p?.name
   return {
     ...baseAnalysis,
+    p: {
+      ...baseAnalysis.p,
+      name: festivalName,
+      planName: festivalName,
+    },
     R: weather?.R || demand.R,
     T: trendModel,
     composite: totalScore,
-    grade: getGrade(totalScore) || baseAnalysis.grade,
+    grade: summary?.scoreGrade ?? getGrade(totalScore) ?? baseAnalysis.grade,
     analysisContent,
+    report,
     server: {
       analysisId: summary?.analysisId ?? null,
       festivalPlanId: summary?.festivalPlanId ?? null,
       festivalName: summary?.festivalName ?? null,
+      scoreGrade: summary?.scoreGrade ?? null,
       analysisStatus: summary?.analysisStatus ?? null,
       createdAt: summary?.createdAt ?? null,
       items: {
@@ -1039,6 +1186,11 @@ export const mergeServerAnalysis = (baseAnalysis, summary, details = {}) => {
       ...(linkage ? { s6: linkage.score, v6: null } : {}),
     },
   }
+}
+
+export const mergeAnalysisReport = (baseAnalysis, response) => {
+  const report = normalizeAnalysisReport(response)
+  return mergeServerAnalysis(baseAnalysis, report.summary, report.details, report)
 }
 
 export const toNumber = asNumber

@@ -5,6 +5,7 @@ import {
   executeFestivalPlanAnalysis,
   getAnalysis,
   getAnalysisId,
+  getAnalysisReport,
   getConflictRiskAnalysis,
   getDemandFitAnalysis,
   getTargetVisitorAnalysis,
@@ -23,7 +24,11 @@ import { LoadingScreen } from './features/loading/LoadingPage'
 import { ITEMS } from './features/analysis/analysisData'
 import { ResultScreen } from './features/analysis/ResultsPage'
 import { Panel } from './features/analysis/DetailPanel'
-import { ReportScreen } from './features/report/ReportPage'
+import {
+  ReportErrorScreen,
+  ReportLoadingScreen,
+  ReportScreen,
+} from './features/report/ReportPage'
 import { DocumentsPage } from './features/documents/DocumentsPage'
 import { buildFestivalPlanPayload } from './features/input/festivalPlanPayload'
 import {
@@ -31,7 +36,10 @@ import {
   normalizeFestivalPlan,
 } from './features/input/festivalPlanParser'
 import { navigate, useRoute } from './routing'
-import { mergeServerAnalysis } from './features/analysis/serverAnalysis'
+import {
+  mergeAnalysisReport,
+  mergeServerAnalysis,
+} from './features/analysis/serverAnalysis'
 
 const EMPTY_PLAN = {
   planName: '',
@@ -68,6 +76,11 @@ export default function App() {
     [documents, setDocuments] = useState([]),
     [activeDocument, setActiveDocument] = useState(null),
     [analysis, setAnalysis] = useState(null),
+    [reportState, setReportState] = useState({
+      status: 'idle',
+      analysis: null,
+      error: null,
+    }),
     [openKey, setOpenKey] = useState(null),
     [isRegisteringPlan, setIsRegisteringPlan] = useState(false),
     [registrationError, setRegistrationError] = useState(''),
@@ -77,6 +90,8 @@ export default function App() {
     [isAnalysisComplete, setIsAnalysisComplete] = useState(false),
     [autoFilledFields, setAutoFilledFields] = useState({})
   const registrationInFlightRef = useRef(false)
+  const planRef = useRef(plan)
+  planRef.current = plan
   const A = useMemo(
       () =>
         analysis ||
@@ -110,11 +125,7 @@ export default function App() {
           activeDocument?.analysisId === route.analysisId
             ? activeDocument
             : documents.find((item) => String(item.analysisId) === route.analysisId)
-        if (!document) {
-          navigate('/documents', { replace: true })
-          return
-        }
-        if (stage !== 'report') {
+        if (document && stage !== 'report') {
           const reportPlan = normalizeFestivalPlan(
             document.plan || {
               ...EMPTY_PLAN,
@@ -127,6 +138,11 @@ export default function App() {
           setAutoFilledFields({})
           setAnalysis(document.analysis || (document.plan ? analyze(reportPlan) : null))
           setStage('report')
+        } else if (!document && stage !== 'report') {
+          setPlan(EMPTY_PLAN)
+          setAutoFilledFields({})
+          setAnalysis(null)
+          setStage('report')
         }
         return
       }
@@ -138,6 +154,49 @@ export default function App() {
       if (stage !== 'landing') setStage('landing')
     }
   }, [activeDocument, documents, isAuthenticated, isSample, route.analysisId, route.name, stage])
+
+  useEffect(() => {
+    if (!isAuthenticated || isSample || route.name !== 'report' || !route.analysisId) return undefined
+
+    const controller = new AbortController()
+    let active = true
+    setReportState({ status: 'loading', analysis: null, error: null })
+
+    Promise.resolve()
+      .then(() => getAnalysisReport(route.analysisId, { signal: controller.signal }))
+      .then((response) => {
+        if (!active) return
+        const reportName = response?.summary?.festivalName
+        const currentPlan = planRef.current
+        const reportPlan = normalizeFestivalPlan({
+          ...currentPlan,
+          ...(reportName === null || reportName === undefined
+            ? {}
+            : { planName: reportName, name: reportName }),
+        })
+        const basePlan =
+          reportPlan.start && reportPlan.end
+            ? reportPlan
+            : normalizeFestivalPlan({ ...SAMPLE, ...reportPlan })
+        const nextAnalysis = mergeAnalysisReport(analyze(basePlan), response)
+        setPlan(reportPlan)
+        setAnalysis(nextAnalysis)
+        setReportState({ status: 'success', analysis: nextAnalysis, error: null })
+      })
+      .catch((error) => {
+        if (!active || error?.name === 'AbortError' || error?.cause?.name === 'AbortError') return
+        setReportState({
+          status: error?.status === 404 ? 'not-found' : 'error',
+          analysis: null,
+          error: error?.message || '최종 리포트를 불러오지 못했습니다.',
+        })
+      })
+
+    return () => {
+      active = false
+      controller.abort()
+    }
+  }, [isAuthenticated, isSample, route.analysisId, route.name])
 
   useEffect(() => {
     const f = (e) => {
@@ -352,6 +411,7 @@ export default function App() {
     setPlan(samplePlan)
     setAutoFilledFields({})
     setAnalysis(analyze(samplePlan))
+    setReportState({ status: 'idle', analysis: null, error: null })
     setIsSample(true)
     setStage('report')
   }
@@ -389,6 +449,7 @@ export default function App() {
           onParsedPlan={handleParsedPlan}
           onOpenReport={(document) => {
             setActiveDocument(document)
+            setReportState({ status: 'loading', analysis: null, error: null })
             const reportPlan = normalizeFestivalPlan(document.plan || EMPTY_PLAN)
             setPlan(reportPlan)
             setAutoFilledFields({})
@@ -430,17 +491,44 @@ export default function App() {
         <ResultScreen
           A={A}
           onEdit={goEdit}
-          onReport={() => setStage('report')}
+          onReport={() => {
+            setReportState({ status: 'loading', analysis: null, error: null })
+            setStage('report')
+            if (registeredAnalysisId) {
+              navigate(`/reports/${encodeURIComponent(registeredAnalysisId)}`)
+            }
+          }}
           onOpen={setOpenKey}
           openKey={openKey}
         />
       )}
-      {stage === 'report' && A && (
+      {stage === 'report' && isSample && A && (
         <ReportScreen
           A={A}
-          onBack={() => (isSample ? home() : setStage('result'))}
+          onBack={home}
           onPrint={() => window.print()}
-          backLabel={isSample ? '랜딩으로 돌아가기' : '결과로 돌아가기'}
+          backLabel="랜딩으로 돌아가기"
+        />
+      )}
+      {stage === 'report' && !isSample && reportState.status === 'loading' && (
+        <ReportLoadingScreen />
+      )}
+      {stage === 'report' && !isSample && reportState.status === 'not-found' && (
+        <ReportErrorScreen
+          error={reportState.error}
+          notFound
+          onBack={openDocuments}
+        />
+      )}
+      {stage === 'report' && !isSample && reportState.status === 'error' && (
+        <ReportErrorScreen error={reportState.error} onBack={openDocuments} />
+      )}
+      {stage === 'report' && !isSample && reportState.status === 'success' && reportState.analysis && (
+        <ReportScreen
+          A={reportState.analysis}
+          onBack={openDocuments}
+          onPrint={() => window.print()}
+          backLabel="문서 목록으로 돌아가기"
         />
       )}
       {openItem && A && (
