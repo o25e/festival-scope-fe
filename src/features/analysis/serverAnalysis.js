@@ -33,7 +33,14 @@ const getScore = (item) =>
 const normalizePriority = (value) => {
   const numeric = asNumber(value)
   if (numeric !== null) return numeric
-  return { HIGH: 1, MEDIUM: 2, LOW: 3 }[String(value || '').toUpperCase()] || 3
+  return {
+    HIGH: 1,
+    MEDIUM: 2,
+    LOW: 3,
+    IMMEDIATE: 1,
+    REVIEW: 2,
+    OPTIONAL: 3,
+  }[String(value || '').toUpperCase()] || 3
 }
 
 const normalizeReportPriority = (value) => {
