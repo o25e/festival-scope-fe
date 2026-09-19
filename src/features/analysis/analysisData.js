@@ -165,6 +165,24 @@ export function cardData(item, A) {
       bars: A.R.weather.rainYears,
       highlight: A.m,
     }
+  if (item.key === 'link' && A.linkage) {
+    const score = A.linkage.score
+    const tone = score === null ? 'w' : score >= 70 ? 'g' : score >= 48 ? 'w' : 'r'
+    return {
+      pill: score === null ? '관광 연계 잠재력' : `연계 ${score >= 70 ? '높음' : score >= 48 ? '보통' : '낮음'}`,
+      tone,
+      metric: score === null ? '-' : score,
+      unit: '/100',
+      sub: [
+        ['전체 후보 POI', `${A.linkage.totalCandidatePoiCount ?? '-'}`],
+        ['관광·문화', `${A.linkage.tourismCultureCount ?? '-'}`],
+        ['음식·쇼핑', `${A.linkage.foodShoppingCount ?? '-'}`],
+        ['숙박', `${A.linkage.accommodationCount ?? '-'}`],
+      ],
+      read: content.summary ?? '-',
+      bars: [],
+    }
+  }
   const P = A.R.poi
   return {
     pill: `잠재력 ${v.v6}`,

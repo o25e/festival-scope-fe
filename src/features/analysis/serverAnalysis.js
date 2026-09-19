@@ -67,6 +67,93 @@ const normalizeWeatherContent = (detail) => {
   }
 }
 
+const normalizePoiRange = (value) => {
+  const range = value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+  return {
+    totalCount: asNumber(range.totalCount),
+    tourismCultureCount: asNumber(range.tourismCultureCount),
+    foodShoppingCount: asNumber(range.foodShoppingCount),
+    accommodationCount: asNumber(range.accommodationCount),
+  }
+}
+
+const normalizePoi = (row, fallbackCategory = null) => {
+  if (!row || typeof row !== 'object' || Array.isArray(row)) return null
+  return {
+    name: firstValue(row, ['poiName', 'placeName', 'name', 'title']),
+    category: firstValue(row, ['category', 'poiCategory', 'type']) || fallbackCategory,
+    distanceKm: asNumber(firstValue(row, ['distanceKm', 'distance'])),
+    address: firstValue(row, ['address', 'roadAddress', 'jibunAddress']),
+    poiType: row.poiType ?? null,
+    linkageType: row.linkageType ?? null,
+    distanceMeter: asNumber(row.distanceMeter),
+    distanceRange: row.distanceRange ?? null,
+    imageUrl: row.imageUrl ?? null,
+    latitude: asNumber(row.latitude),
+    longitude: asNumber(row.longitude),
+  }
+}
+
+const normalizePoiList = (linkage) => {
+  const groups = [
+    { keys: ['tourismCulturePois', 'tourismCulturePoiList', 'tourismCulturePlaces', 'tourismCulture'], category: '관광·문화' },
+    { keys: ['foodShoppingPois', 'foodShoppingPoiList', 'foodShoppingPlaces', 'foodShopping'], category: '음식·쇼핑' },
+    { keys: ['accommodationPois', 'accommodationPoiList', 'accommodationPlaces', 'accommodation'], category: '숙박' },
+    { keys: ['poiList', 'pois'], category: null },
+  ]
+  const result = []
+  groups.forEach(({ keys, category }) => {
+    const rows = arrayValue(linkage, keys)
+    if (rows === undefined) return
+    rows.forEach((row) => {
+      const normalized = normalizePoi(row, category)
+      if (normalized) result.push(normalized)
+    })
+  })
+  return result
+}
+
+const normalizeRegionalIndicator = (value) => {
+  const indicator = value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+  return {
+    name: indicator.name ?? null,
+    value: asNumber(indicator.value),
+  }
+}
+
+const normalizeTourismLinkageModel = (summary, detail) => {
+  const linkage = detail?.tourismLinkage && typeof detail.tourismLinkage === 'object'
+    ? detail.tourismLinkage
+    : {}
+  const regionalIndicators = detail?.regionalIndicators && typeof detail.regionalIndicators === 'object'
+    ? detail.regionalIndicators
+    : linkage.regionalIndicators || {}
+  const score = Object.prototype.hasOwnProperty.call(detail || {}, 'score')
+    ? asNumber(detail.score)
+    : getScore(summary)
+  return {
+    score,
+    totalCandidatePoiCount: asNumber(linkage.totalCandidatePoiCount),
+    tourismCultureCount: asNumber(linkage.tourismCultureCount),
+    foodShoppingCount: asNumber(linkage.foodShoppingCount),
+    accommodationCount: asNumber(linkage.accommodationCount),
+    tourismLinkageSummary: linkage.tourismLinkageSummary ?? null,
+    consumptionLinkageSummary: linkage.consumptionLinkageSummary ?? null,
+    stayLinkageSummary: linkage.stayLinkageSummary ?? null,
+    poiSummary: {
+      within3km: normalizePoiRange(linkage.poiSummary?.within3km),
+      between3And5km: normalizePoiRange(linkage.poiSummary?.between3And5km),
+      within5km: normalizePoiRange(linkage.poiSummary?.within5km),
+    },
+    regionalIndicators: {
+      resourceDemand: normalizeRegionalIndicator(regionalIndicators.resourceDemand),
+      consumptionIntensity: normalizeRegionalIndicator(regionalIndicators.consumptionIntensity),
+      stayIntensity: normalizeRegionalIndicator(regionalIndicators.stayIntensity),
+    },
+    pois: normalizePoiList(linkage),
+  }
+}
+
 const ownValue = (value, keys) => {
   for (const key of keys) {
     if (value && Object.prototype.hasOwnProperty.call(value, key)) return value[key]
@@ -678,6 +765,7 @@ export const mergeServerAnalysis = (baseAnalysis, summary, details = {}) => {
   const demandSummary = getItem(summary, 'DEMAND_FIT')
   const conflictSummary = getItem(summary, 'CONFLICT_RISK')
   const weatherSummary = getItem(summary, 'WEATHER_RISK')
+  const linkageSummary = getItem(summary, 'TOURISM_LINKAGE')
   const targetDetail = details.TARGET_VISITOR || {}
   const trendDetail = details.TREND_FIT || {}
   const demandDetail = details.DEMAND_FIT || {}
@@ -685,6 +773,9 @@ export const mergeServerAnalysis = (baseAnalysis, summary, details = {}) => {
   const weatherDetail = hasWeatherDetail ? details.WEATHER_RISK : null
   const hasConflictDetail = Object.prototype.hasOwnProperty.call(details, 'CONFLICT_RISK') && details.CONFLICT_RISK !== null && details.CONFLICT_RISK !== undefined
   const conflictDetail = hasConflictDetail ? details.CONFLICT_RISK : null
+  const hasLinkageDetail = Object.prototype.hasOwnProperty.call(details, 'TOURISM_LINKAGE') && details.TOURISM_LINKAGE !== null && details.TOURISM_LINKAGE !== undefined
+  const linkageDetail = hasLinkageDetail ? details.TOURISM_LINKAGE : null
+  const linkage = hasLinkageDetail ? normalizeTourismLinkageModel(linkageSummary, linkageDetail) : null
   const conflict = hasConflictDetail ? normalizeConflictModel(baseAnalysis, conflictSummary, conflictDetail) : null
   const totalScore = Object.prototype.hasOwnProperty.call(summary || {}, 'totalScore')
     ? asNumber(summary.totalScore)
@@ -763,8 +854,10 @@ export const mergeServerAnalysis = (baseAnalysis, summary, details = {}) => {
       DEMAND_FIT: demandSummary ? { summary: demandSummary, detail: demandDetail } : null,
         CONFLICT_RISK: conflictSummary || hasConflictDetail ? { summary: conflictSummary, detail: conflictDetail } : null,
         WEATHER_RISK: weatherSummary || hasWeatherDetail ? { summary: weatherSummary, detail: weatherDetail } : null,
+        TOURISM_LINKAGE: linkageSummary || hasLinkageDetail ? { summary: linkageSummary, detail: linkageDetail } : null,
       },
     },
+    linkage,
     v: {
       ...baseAnalysis.v,
       sims: records,
@@ -786,6 +879,7 @@ export const mergeServerAnalysis = (baseAnalysis, summary, details = {}) => {
       ...demand.v,
       ...(conflict || {}),
       ...(weather?.v || {}),
+      ...(linkage ? { s6: linkage.score, v6: null } : {}),
     },
   }
 }

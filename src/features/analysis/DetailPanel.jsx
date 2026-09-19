@@ -576,6 +576,50 @@ export function getDetailHtml(item, A) {
       `<p class="note">이 진단은 미래 날씨를 예측하지 않습니다. 과거 동일 시기 기상 통계와 기획안의 구조적 취약성만 봅니다. 흥행 스코어에는 반영되지 않습니다.</p>`
     )
   }
+  if (item.key === 'link' && A.linkage) {
+    const L = A.linkage
+    const displayCount = (value) => value === null || value === undefined ? '-' : fmt(value)
+    const displayPoiDistance = (poi) => {
+      if (poi.distanceMeter !== null && poi.distanceMeter !== undefined) {
+        return poi.distanceMeter < 1000
+          ? `${Math.round(poi.distanceMeter)}m`
+          : `${(poi.distanceMeter / 1000).toFixed(1)}km`
+      }
+      return poi.distanceRange || (poi.distanceKm === null || poi.distanceKm === undefined ? '-' : `${poi.distanceKm}km`)
+    }
+    const poiTypeLabel = (value) =>
+      ({
+        TOURIST_ATTRACTION: '관광·문화',
+        RESTAURANT: '음식점',
+        SHOPPING: '쇼핑',
+        ACCOMMODATION: '숙박',
+      }[value] || value || '-')
+    const categoryRows = [
+      ['관광·문화', 'tourismCultureCount'],
+      ['음식·쇼핑', 'foodShoppingCount'],
+      ['숙박', 'accommodationCount'],
+      ['전체', 'totalCount'],
+    ].map(([label, key]) => `<tr><td><b>${label}</b></td><td class="n">${displayCount(L.poiSummary.within3km[key])}</td><td class="n">${displayCount(L.poiSummary.between3And5km[key])}</td><td class="n">${displayCount(L.poiSummary.within5km[key])}</td></tr>`).join('')
+    const regionalIndicatorCards = [
+      [L.regionalIndicators.resourceDemand, L.tourismLinkageSummary],
+      [L.regionalIndicators.consumptionIntensity, L.consumptionLinkageSummary],
+      [L.regionalIndicators.stayIntensity, L.stayLinkageSummary],
+    ].map(([indicator, description]) => mt(
+      indicator.name || '-',
+      indicator.value === null || indicator.value === undefined ? '-' : indicator.value,
+      description || '서버 지역 지표',
+    )).join('')
+    const poiRows = L.pois.length
+      ? L.pois.map((poi) => `<tr><td><b>${poi.name || '-'}</b>${poi.address ? `<div style="color:var(--muted);font-size:11px">${poi.address}</div>` : ''}</td><td><span class="tagsm n">${poiTypeLabel(poi.poiType || poi.category)}</span></td><td class="n">${displayPoiDistance(poi)}</td></tr>`).join('')
+      : '<tr><td colspan="3" style="color:var(--muted)">상세 POI 목록이 제공되지 않았습니다.</td></tr>'
+    return (
+      sec(1, '핵심 지표', `<div class="metricrow c3">${mt('관광 연계 잠재력', `${L.score === null ? '-' : L.score}<small>/100</small>`, '서버 분석 점수', true)}${mt('전체 후보 POI', `${displayCount(L.totalCandidatePoiCount)}<small>곳</small>`, '서버 응답 기준')}${mt('관광·문화 / 음식·쇼핑 / 숙박', `${displayCount(L.tourismCultureCount)} / ${displayCount(L.foodShoppingCount)} / ${displayCount(L.accommodationCount)}<small>곳</small>`, '후보 POI 분류별')}`) +
+      sec(2, '판단 근거 및 데이터', `<div class="vizbox"><table class="dt"><tr><th>구분</th><th class="n">3km 이내</th><th class="n">3~5km</th><th class="n">5km 이내</th></tr>${categoryRows}</table></div><table class="dt" style="margin-top:12px"><tr><th>주요 연계 자원</th><th>구분</th><th class="n">거리</th></tr>${poiRows}</table><div class="metricrow c3" style="margin-top:12px">${regionalIndicatorCards}</div>`) +
+      sec(3, '결과 해석', `<div class="readbox read"><p>${content.detail || '-'}</p></div>`) +
+      sec(4, '권장 수정사항', recs(content.recommendations || [])) +
+      '<p class="note">서버가 제공한 거리 구간 집계와 POI 데이터를 표시합니다. 누락된 값은 추정하지 않고 -로 표시합니다.</p>'
+    )
+  }
   const P = R.poi,
     byType = (t) => R.poiList.filter((x) => x.t === t)
   return (
